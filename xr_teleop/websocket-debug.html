@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Debug Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        #status {
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        #log {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+            font-family: monospace;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
+        }
+
+        .info {
+            color: blue;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .control-panel {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        label {
+            margin-right: 10px;
+        }
+
+        input[type="text"] {
+            padding: 8px;
+            width: 250px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>WebSocket Debug Tool</h1>
+    <div class="nav-links" style="margin-bottom: 20px;">
+        <a href="index.html"
+            style="display: inline-block; background-color: #4285f4; color: white; padding: 8px 16px; margin-right: 10px; text-decoration: none; border-radius: 4px; font-weight: bold;">WebXR
+            App</a>
+        <a href="websocket-debug.html"
+            style="display: inline-block; background-color: #34a853; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; font-weight: bold;">WebSocket
+            Debug Tool</a>
+    </div>
+    <div class="control-panel">
+        <h2>Connection Settings</h2>
+        <div>
+            <label for="wsUrl">WebSocket URL:</label>
+            <input type="text" id="wsUrl" value="wss://141.3.53.34:8765">
+        </div>
+        <div style="margin-top: 10px;">
+            <button id="connectBtn">Connect</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        <h2>Trajectory Control</h2>
+        <button id="startTrajectory" disabled>Start Circular Trajectory</button>
+        <button id="stopTrajectory" disabled>Stop Trajectory</button>
+    </div>
+
+    <div id="status">Status: Disconnected</div>
+
+    <h2>Log</h2>
+    <div id="log"></div>
+
+    <script>
+        let socket = null;
+        let trajectoryInterval = null;
+        let trajectoryAngle = 0;
+
+        // Elements
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const startTrajectoryBtn = document.getElementById('startTrajectory');
+        const stopTrajectoryBtn = document.getElementById('stopTrajectory');
+        const statusEl = document.getElementById('status');
+        const logEl = document.getElementById('log');
+        const wsUrlInput = document.getElementById('wsUrl');
+
+        // Log function
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        // Update connection status
+        function updateStatus(message) {
+            statusEl.textContent = `Status: ${message}`;
+        }
+
+        // Connect to WebSocket
+        function connect() {
+            if (socket && socket.readyState !== WebSocket.CLOSED) {
+                log('Already connected or connecting', 'error');
+                return;
+            }
+
+            const wsUrl = wsUrlInput.value.trim();
+            if (!wsUrl) {
+                log('WebSocket URL is required', 'error');
+                return;
+            }
+
+            try {
+                log(`Attempting to connect to ${wsUrl}...`);
+                updateStatus('Connecting...');
+
+                socket = new WebSocket(wsUrl);
+
+                socket.onopen = () => {
+                    log('Connection established', 'success');
+                    updateStatus('Connected');
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    startTrajectoryBtn.disabled = false;
+                };
+
+                socket.onclose = (event) => {
+                    log(`Connection closed: Code ${event.code} - ${event.reason || 'No reason provided'}`, 'info');
+                    updateStatus('Disconnected');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    startTrajectoryBtn.disabled = true;
+                    stopTrajectoryBtn.disabled = true;
+                    stopTrajectory();
+                };
+
+                socket.onerror = (error) => {
+                    log(`WebSocket error: ${error}`, 'error');
+                    updateStatus('Error');
+                };
+
+                socket.onmessage = (event) => {
+                    log(`Received: ${event.data}`);
+                };
+            } catch (error) {
+                log(`Error setting up WebSocket: ${error.message}`, 'error');
+                updateStatus('Error');
+            }
+        }
+
+        // Disconnect from WebSocket
+        function disconnect() {
+            if (socket) {
+                log('Disconnecting...');
+                socket.close();
+                socket = null;
+            }
+        }
+
+        // Send a message to the WebSocket
+        function sendMessage(data) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                const message = JSON.stringify(data);
+                socket.send(message);
+                log(`Sent: ${message}`);
+                return true;
+            } else {
+                log('Cannot send message: WebSocket is not connected', 'error');
+                return false;
+            }
+        }
+
+        // Start sending circular trajectory data
+        function startTrajectory() {
+            if (trajectoryInterval) {
+                log('Trajectory is already running', 'error');
+                return;
+            }
+
+            trajectoryAngle = 0;
+
+            log('Starting circular trajectory...');
+            startTrajectoryBtn.disabled = true;
+            stopTrajectoryBtn.disabled = false;
+
+            // Send trajectory data every 100ms
+            trajectoryInterval = setInterval(() => {
+                // Calculate position on a circle with radius 0.3
+                const radius = 0.3;
+                const x = radius * Math.cos(trajectoryAngle);
+                const z = radius * Math.sin(trajectoryAngle);
+                const y = 0.5; // Fixed height
+
+                // Calculate a simple rotation (just rotating around y-axis)
+                // [x, y, z, w] format for quaternion
+                const qx = 0;
+                const qy = Math.sin(trajectoryAngle / 2);
+                const qz = 0;
+                const qw = Math.cos(trajectoryAngle / 2);
+
+                // Create controller data structure (matching our WebXR format)
+                const controllerData = {
+                    right: {
+                        position: [x, y, z],
+                        rotation: [qx, qy, qz, qw],
+                        debug: {
+                            triggerValue: 0,
+                            gripValue: 0,
+                            primaryButtonPressed: false
+                        }
+                    }
+                };
+
+                // Send the data
+                if (!sendMessage(controllerData)) {
+                    stopTrajectory();
+                }
+
+                // Increment angle for next iteration
+                trajectoryAngle += 0.05;
+                if (trajectoryAngle > Math.PI * 2) {
+                    trajectoryAngle -= Math.PI * 2;
+                }
+            }, 100);
+        }
+
+        // Stop sending trajectory data
+        function stopTrajectory() {
+            if (trajectoryInterval) {
+                clearInterval(trajectoryInterval);
+                trajectoryInterval = null;
+                log('Trajectory stopped');
+                startTrajectoryBtn.disabled = false;
+                stopTrajectoryBtn.disabled = true;
+            }
+        }
+
+        // Event listeners
+        connectBtn.addEventListener('click', connect);
+        disconnectBtn.addEventListener('click', disconnect);
+        startTrajectoryBtn.addEventListener('click', startTrajectory);
+        stopTrajectoryBtn.addEventListener('click', stopTrajectory);
+
+        // Initial log message
+        log('WebSocket Debug Tool ready');
+    </script>
+</body>
+
+</html>

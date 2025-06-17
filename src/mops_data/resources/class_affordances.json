@@ -1,0 +1,1552 @@
+[
+    {
+        "model_cat": "Alcohol",
+        "affordances": [
+            "consumable",
+            "drinkable",
+            "mixable",
+            "pourable"
+        ]
+    },
+    {
+        "model_cat": "Apple",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "hold",
+            "juicy",
+            "move",
+            "peelable",
+            "throwable"
+        ]
+    },
+    {
+        "model_cat": "Avocado",
+        "affordances": [
+            "cuttable",
+            "display",
+            "edible",
+            "grasp",
+            "hold",
+            "mashable",
+            "move",
+            "peelable",
+            "spreadable",
+            "squeezable"
+        ]
+    },
+    {
+        "model_cat": "Bagel",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "fillable",
+            "grasp",
+            "hold",
+            "spreadable",
+            "stackable",
+            "toastable"
+        ]
+    },
+    {
+        "model_cat": "BaggedFood",
+        "affordances": [
+            "consumable",
+            "grasp",
+            "move",
+            "openable",
+            "recyclable",
+            "sealable",
+            "store"
+        ]
+    },
+    {
+        "model_cat": "Baguette",
+        "affordances": [
+            "breakable",
+            "cuttable",
+            "drinkable",
+            "grasp",
+            "hold",
+            "spreadable",
+            "toastable"
+        ]
+    },
+    {
+        "model_cat": "Banana",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "hold",
+            "mashable",
+            "peelable",
+            "recyclable",
+            "throwable"
+        ]
+    },
+    {
+        "model_cat": "Bar",
+        "affordances": [
+            "grasp",
+            "lift",
+            "mountable",
+            "stackable",
+            "support"
+        ]
+    },
+    {
+        "model_cat": "BarSoap",
+        "affordances": [
+            "grasp",
+            "hold",
+            "move",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Beer",
+        "affordances": [
+            "coolable",
+            "drinkable",
+            "grasp",
+            "lift",
+            "openable",
+            "pourable"
+        ]
+    },
+    {
+        "model_cat": "BellPepper",
+        "affordances": [
+            "cuttable",
+            "display",
+            "edible",
+            "grasp",
+            "move",
+            "roastable",
+            "rotate"
+        ]
+    },
+    {
+        "model_cat": "Bottle",
+        "affordances": [
+            "contain",
+            "pourable",
+            "close",
+            "openable",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "BottledDrink",
+        "affordances": [
+            "coolable",
+            "drinkable",
+            "grasp",
+            "hold",
+            "openable",
+            "pourable",
+            "recyclable",
+            "sealable",
+            "squeezable"
+        ]
+    },
+    {
+        "model_cat": "BottledWater",
+        "affordances": [
+            "drinkable",
+            "grasp",
+            "hold",
+            "openable",
+            "pourable",
+            "recyclable",
+            "sealable",
+            "squeezable"
+        ]
+    },
+    {
+        "model_cat": "Bowl",
+        "affordances": [
+            "contain",
+            "hold",
+            "organize",
+            "store",
+            "support"
+        ]
+    },
+    {
+        "model_cat": "Box",
+        "affordances": [
+            "openable",
+            "contain",
+            "pushable",
+            "support",
+            "pull",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "BoxedDrink",
+        "affordances": [
+            "drinkable",
+            "grasp",
+            "move",
+            "openable",
+            "pourable",
+            "recyclable",
+            "sealable",
+            "squeezable",
+            "stackable"
+        ]
+    },
+    {
+        "model_cat": "BoxedFood",
+        "affordances": [
+            "consumable",
+            "cookable",
+            "grasp",
+            "move",
+            "openable",
+            "recyclable",
+            "stackable",
+            "store"
+        ]
+    },
+    {
+        "model_cat": "Bread",
+        "affordances": [
+            "breakable",
+            "cuttable",
+            "edible",
+            "grasp",
+            "hold",
+            "move",
+            "spreadable",
+            "stackable",
+            "toastable"
+        ]
+    },
+    {
+        "model_cat": "Broccoli",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "lift",
+            "move",
+            "rotate"
+        ]
+    },
+    {
+        "model_cat": "Bucket",
+        "affordances": [
+            "contain",
+            "pourable",
+            "lift",
+            "support",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Cake",
+        "affordances": [
+            "consumable",
+            "cuttable",
+            "decorative",
+            "grasp",
+            "move",
+            "shareable",
+            "stackable"
+        ]
+    },
+    {
+        "model_cat": "Camera",
+        "affordances": [
+            "contain",
+            "layable",
+            "press",
+            "pushable",
+            "support",
+            "pull",
+            "openable",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Can",
+        "affordances": [
+            "fillable",
+            "grasp",
+            "lift",
+            "move",
+            "pourable",
+            "recyclable",
+            "sealable",
+            "stackable"
+        ]
+    },
+    {
+        "model_cat": "Candle",
+        "affordances": [
+            "decorative",
+            "grasp",
+            "move",
+            "placeable"
+        ]
+    },
+    {
+        "model_cat": "CannedFood",
+        "affordances": [
+            "consumable",
+            "grasp",
+            "move",
+            "openable",
+            "recyclable",
+            "stackable",
+            "store"
+        ]
+    },
+    {
+        "model_cat": "Carrot",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "hold",
+            "lift",
+            "move",
+            "peelable",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Cart",
+        "affordances": [
+            "contain",
+            "pushable",
+            "move",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Cereal",
+        "affordances": [
+            "contain",
+            "drinkable",
+            "edible",
+            "mixable",
+            "pourable",
+            "scoopable"
+        ]
+    },
+    {
+        "model_cat": "Chair",
+        "affordances": [
+            "pushable",
+            "support",
+            "move",
+            "sittable",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Cheese",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "spreadable",
+            "stackable"
+        ]
+    },
+    {
+        "model_cat": "Chips",
+        "affordances": [
+            "edible",
+            "grasp",
+            "hold",
+            "shareable",
+            "stackable"
+        ]
+    },
+    {
+        "model_cat": "Chocolate",
+        "affordances": [
+            "breakable",
+            "edible",
+            "grasp",
+            "hold",
+            "shareable"
+        ]
+    },
+    {
+        "model_cat": "Clock",
+        "affordances": [
+            "listen",
+            "layable",
+            "display",
+            "move",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "CoffeeCup",
+        "affordances": [
+            "drinkable",
+            "fillable",
+            "grasp",
+            "hold",
+            "lift",
+            "pourable",
+            "stackable",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "CoffeeMachine",
+        "affordances": [
+            "openable",
+            "contain",
+            "pourable",
+            "press",
+            "pushable",
+            "lift",
+            "support",
+            "move",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Condiment",
+        "affordances": [
+            "edible",
+            "grasp",
+            "mixable",
+            "pourable",
+            "scoopable",
+            "sealable",
+            "spreadable",
+            "squeezable"
+        ]
+    },
+    {
+        "model_cat": "Corn",
+        "affordances": [
+            "cookable",
+            "edible",
+            "grasp",
+            "peelable",
+            "roastable"
+        ]
+    },
+    {
+        "model_cat": "Counter",
+        "affordances": [
+            "layable"
+        ]
+    },
+    {
+        "model_cat": "Croissant",
+        "affordances": [
+            "breakable",
+            "cuttable",
+            "edible",
+            "fillable",
+            "grasp",
+            "spreadable",
+            "stackable"
+        ]
+    },
+    {
+        "model_cat": "Cucumber",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "juicy",
+            "move",
+            "peelable"
+        ]
+    },
+    {
+        "model_cat": "Cup",
+        "affordances": [
+            "drinkable",
+            "fillable",
+            "grasp",
+            "hold",
+            "lift",
+            "pourable",
+            "stackable",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Cupcake",
+        "affordances": [
+            "consumable",
+            "decorative",
+            "edible",
+            "grasp",
+            "hold",
+            "shareable"
+        ]
+    },
+    {
+        "model_cat": "CuttingBoard",
+        "affordances": [
+            "cuttable",
+            "grasp",
+            "placeable",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Dishwasher",
+        "affordances": [
+            "openable",
+            "contain",
+            "press",
+            "pushable",
+            "support",
+            "move",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Dispenser",
+        "affordances": [
+            "contain",
+            "pourable",
+            "press",
+            "lift",
+            "openable",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Display",
+        "affordances": [
+            "layable",
+            "display",
+            "press",
+            "support",
+            "rotate"
+        ]
+    },
+    {
+        "model_cat": "Donut",
+        "affordances": [
+            "consumable",
+            "cuttable",
+            "edible",
+            "fillable",
+            "grasp",
+            "hold",
+            "shareable",
+            "stackable"
+        ]
+    },
+    {
+        "model_cat": "Door",
+        "affordances": [
+            "openable"
+        ]
+    },
+    {
+        "model_cat": "Egg",
+        "affordances": [
+            "breakable",
+            "cookable",
+            "edible",
+            "grasp",
+            "mixable",
+            "peelable"
+        ]
+    },
+    {
+        "model_cat": "Eggplant",
+        "affordances": [
+            "cookable",
+            "cuttable",
+            "edible",
+            "grasp",
+            "lift",
+            "move",
+            "peelable",
+            "roastable",
+            "rotate"
+        ]
+    },
+    {
+        "model_cat": "Eyeglasses",
+        "affordances": [
+            "wear",
+            "support",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Fan",
+        "affordances": [
+            "layable",
+            "press",
+            "pushable",
+            "support",
+            "move",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Faucet",
+        "affordances": [
+            "pourable",
+            "layable",
+            "turn",
+            "press",
+            "pushable",
+            "support",
+            "pull",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Fish",
+        "affordances": [
+            "cookable",
+            "cuttable",
+            "edible",
+            "fillable",
+            "grasp",
+            "hold",
+            "move"
+        ]
+    },
+    {
+        "model_cat": "FoldingChair",
+        "affordances": [
+            "grasp",
+            "sittable",
+            "foldable",
+            "support"
+        ]
+    },
+    {
+        "model_cat": "Fork",
+        "affordances": [
+            "grasp",
+            "hold",
+            "manipulable",
+            "pointable"
+        ]
+    },
+    {
+        "model_cat": "Fridge",
+        "affordances": [
+            "close",
+            "contain",
+            "coolable",
+            "openable",
+            "store"
+        ]
+    },
+    {
+        "model_cat": "Garlic",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "peelable",
+            "roastable"
+        ]
+    },
+    {
+        "model_cat": "Globe",
+        "affordances": [
+            "layable",
+            "display",
+            "support",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Handle",
+        "affordances": [
+            "pushable",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Hood",
+        "affordances": []
+    },
+    {
+        "model_cat": "HotDog",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "hold",
+            "move",
+            "roastable",
+            "squeezable",
+            "throwable"
+        ]
+    },
+    {
+        "model_cat": "Jam",
+        "affordances": [
+            "contain",
+            "edible",
+            "grasp",
+            "hold",
+            "mixable",
+            "openable",
+            "sealable",
+            "spreadable"
+        ]
+    },
+    {
+        "model_cat": "Jug",
+        "affordances": [
+            "fillable",
+            "grasp",
+            "hold",
+            "lift",
+            "pourable",
+            "sealable",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Ketchup",
+        "affordances": [
+            "consumable",
+            "edible",
+            "grasp",
+            "openable",
+            "pourable",
+            "sealable",
+            "spreadable",
+            "squeezable",
+            "store"
+        ]
+    },
+    {
+        "model_cat": "Kettle",
+        "affordances": [
+            "contain",
+            "press",
+            "pushable",
+            "lift",
+            "support",
+            "openable",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Keyboard",
+        "affordances": [
+            "layable",
+            "press",
+            "support",
+            "move",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "KitchenPot",
+        "affordances": [
+            "contain",
+            "pourable",
+            "press",
+            "pushable",
+            "lift",
+            "pull",
+            "openable",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Kiwi",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "hold",
+            "juicy",
+            "move",
+            "peelable",
+            "throwable"
+        ]
+    },
+    {
+        "model_cat": "Knife",
+        "affordances": [
+            "cut",
+            "move",
+            "stab",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "KnifeBlock",
+        "affordances": [
+            "contain",
+            "display",
+            "grasp",
+            "move",
+            "organize",
+            "store"
+        ]
+    },
+    {
+        "model_cat": "Ladle",
+        "affordances": [
+            "grasp",
+            "hold",
+            "lift",
+            "pourable",
+            "scoopable",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Lamp",
+        "affordances": [
+            "layable",
+            "press",
+            "connect",
+            "pushable",
+            "support",
+            "move",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Laptop",
+        "affordances": [
+            "layable",
+            "display",
+            "press",
+            "support",
+            "move",
+            "openable",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Lemon",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "juicy",
+            "move",
+            "squeezable"
+        ]
+    },
+    {
+        "model_cat": "Lighter",
+        "affordances": [
+            "layable",
+            "press",
+            "connect",
+            "move",
+            "openable",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Lime",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "juicy",
+            "move",
+            "squeezable",
+            "throwable"
+        ]
+    },
+    {
+        "model_cat": "Mango",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "hold",
+            "juicy",
+            "lift",
+            "peelable",
+            "rotate",
+            "throwable"
+        ]
+    },
+    {
+        "model_cat": "Microwave",
+        "affordances": [
+            "openable",
+            "contain",
+            "layable",
+            "press",
+            "pushable",
+            "support",
+            "pull",
+            "rotate"
+        ]
+    },
+    {
+        "model_cat": "Milk",
+        "affordances": [
+            "consumable",
+            "drinkable",
+            "edible",
+            "mixable",
+            "pourable"
+        ]
+    },
+    {
+        "model_cat": "Mouse",
+        "affordances": [
+            "move",
+            "press",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Mug",
+        "affordances": [
+            "cookable",
+            "coolable",
+            "drinkable",
+            "fillable",
+            "grasp",
+            "hold",
+            "stackable",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Mushroom",
+        "affordances": [
+            "cookable",
+            "cuttable",
+            "edible",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Onion",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "move",
+            "peelable",
+            "throwable"
+        ]
+    },
+    {
+        "model_cat": "Orange",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "juicy",
+            "move",
+            "peelable",
+            "squeezable",
+            "throwable"
+        ]
+    },
+    {
+        "model_cat": "Outlet",
+        "affordances": [
+            "connect",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Oven",
+        "affordances": [
+            "openable",
+            "contain",
+            "layable",
+            "press",
+            "pushable",
+            "support",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Pan",
+        "affordances": [
+            "cookable",
+            "grasp",
+            "lift",
+            "placeable",
+            "pourable",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "PaperTowel",
+        "affordances": [
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Peach",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "juicy",
+            "move",
+            "peelable"
+        ]
+    },
+    {
+        "model_cat": "Pear",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "juicy",
+            "move"
+        ]
+    },
+    {
+        "model_cat": "Pen",
+        "affordances": [
+            "layable",
+            "close",
+            "press",
+            "openable",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Phone",
+        "affordances": [
+            "contain",
+            "layable",
+            "close",
+            "press",
+            "move",
+            "openable",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Plant",
+        "affordances": [
+            "cuttable",
+            "grasp",
+            "move"
+        ]
+    },
+    {
+        "model_cat": "Plate",
+        "affordances": [
+            "contain",
+            "display",
+            "grasp",
+            "hold",
+            "placeable",
+            "stackable",
+            "support",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Pliers",
+        "affordances": [
+            "cut",
+            "move",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Potato",
+        "affordances": [
+            "cookable",
+            "cuttable",
+            "grasp",
+            "hold",
+            "mashable",
+            "move",
+            "peelable",
+            "store",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Printer",
+        "affordances": [
+            "contain",
+            "openable",
+            "press",
+            "pushable",
+            "support",
+            "move",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Refrigerator",
+        "affordances": [
+            "openable",
+            "contain",
+            "layable",
+            "pushable",
+            "support",
+            "pull"
+        ]
+    },
+    {
+        "model_cat": "Remote",
+        "affordances": [
+            "layable",
+            "press",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "RollingPin",
+        "affordances": [
+            "grasp",
+            "lift",
+            "move",
+            "pushable",
+            "rotate"
+        ]
+    },
+    {
+        "model_cat": "Safe",
+        "affordances": [
+            "contain",
+            "press",
+            "support",
+            "pull",
+            "openable",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Scissors",
+        "affordances": [
+            "cut",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Shaker",
+        "affordances": [
+            "fillable",
+            "grasp",
+            "hold",
+            "mixable",
+            "openable",
+            "pourable",
+            "sealable"
+        ]
+    },
+    {
+        "model_cat": "Sink",
+        "affordances": [
+            "contain",
+            "fillable",
+            "support",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Spatula",
+        "affordances": [
+            "grasp",
+            "manipulable",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Sponge",
+        "affordances": [
+            "grasp",
+            "squeezable",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Spoon",
+        "affordances": [
+            "grasp",
+            "hold",
+            "lift",
+            "manipulable",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Spray",
+        "affordances": [
+            "grasp",
+            "hold",
+            "press",
+            "squeezable"
+        ]
+    },
+    {
+        "model_cat": "Squash",
+        "affordances": [
+            "cookable",
+            "cuttable",
+            "display",
+            "edible",
+            "grasp",
+            "mashable",
+            "move",
+            "peelable"
+        ]
+    },
+    {
+        "model_cat": "Stapler",
+        "affordances": [
+            "layable",
+            "press",
+            "support",
+            "openable",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Steak",
+        "affordances": [
+            "cookable",
+            "cuttable",
+            "edible",
+            "grasp",
+            "hold",
+            "move"
+        ]
+    },
+    {
+        "model_cat": "Stool",
+        "affordances": [
+            "grasp",
+            "hold",
+            "lift",
+            "move",
+            "stackable",
+            "support"
+        ]
+    },
+    {
+        "model_cat": "StorageFurniture",
+        "affordances": [
+            "openable",
+            "contain",
+            "layable",
+            "pushable",
+            "support",
+            "move",
+            "pull"
+        ]
+    },
+    {
+        "model_cat": "Stove",
+        "affordances": [
+            "adjustable",
+            "cookable",
+            "grasp",
+            "move"
+        ]
+    },
+    {
+        "model_cat": "Stovetop",
+        "affordances": [
+            "contain",
+            "support"
+        ]
+    },
+    {
+        "model_cat": "Suitcase",
+        "affordances": [
+            "contain",
+            "openable",
+            "layable",
+            "press",
+            "pushable",
+            "lift",
+            "support",
+            "move",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "SweetPotato",
+        "affordances": [
+            "cookable",
+            "cuttable",
+            "edible",
+            "grasp",
+            "hold",
+            "mashable",
+            "peelable",
+            "roastable",
+            "store"
+        ]
+    },
+    {
+        "model_cat": "Switch",
+        "affordances": [
+            "layable",
+            "press",
+            "pushable",
+            "support",
+            "move",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Table",
+        "affordances": [
+            "contain",
+            "layable",
+            "pull",
+            "pushable",
+            "support",
+            "move",
+            "openable"
+        ]
+    },
+    {
+        "model_cat": "Tangerine",
+        "affordances": [
+            "edible",
+            "grasp",
+            "hold",
+            "juicy",
+            "move",
+            "peelable",
+            "squeezable"
+        ]
+    },
+    {
+        "model_cat": "Teapot",
+        "affordances": [
+            "cookable",
+            "coolable",
+            "fillable",
+            "grasp",
+            "move",
+            "openable",
+            "pourable"
+        ]
+    },
+    {
+        "model_cat": "Toaster",
+        "affordances": [
+            "contain",
+            "layable",
+            "press",
+            "pushable",
+            "move",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Toilet",
+        "affordances": [
+            "openable",
+            "layable",
+            "press",
+            "pushable",
+            "lift",
+            "support",
+            "sittable",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Tomato",
+        "affordances": [
+            "cuttable",
+            "edible",
+            "grasp",
+            "juicy",
+            "move"
+        ]
+    },
+    {
+        "model_cat": "TrashCan",
+        "affordances": [
+            "openable",
+            "contain",
+            "press",
+            "pushable",
+            "support",
+            "move",
+            "pull",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Tray",
+        "affordances": [
+            "grasp",
+            "hold",
+            "organize",
+            "stackable",
+            "support",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "USB",
+        "affordances": [
+            "remove",
+            "grasp",
+            "pull",
+            "openable",
+            "rotate",
+            "insert"
+        ]
+    },
+    {
+        "model_cat": "UtensilHolder",
+        "affordances": [
+            "contain",
+            "decorative",
+            "grasp",
+            "move",
+            "organize",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "UtensilRack",
+        "affordances": [
+            "grasp",
+            "hold",
+            "organize",
+            "store",
+            "support",
+            "washable"
+        ]
+    },
+    {
+        "model_cat": "Waffle",
+        "affordances": [
+            "breakable",
+            "cuttable",
+            "edible",
+            "grasp",
+            "spreadable",
+            "stackable",
+            "toastable"
+        ]
+    },
+    {
+        "model_cat": "Wall",
+        "affordances": [
+            "support"
+        ]
+    },
+    {
+        "model_cat": "WashingMachine",
+        "affordances": [
+            "contain",
+            "layable",
+            "close",
+            "press",
+            "support",
+            "openable",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "WaterBottle",
+        "affordances": [
+            "drinkable",
+            "fillable",
+            "grasp",
+            "hold",
+            "pourable",
+            "sealable",
+            "squeezable"
+        ]
+    },
+    {
+        "model_cat": "Window",
+        "affordances": [
+            "openable",
+            "pushable",
+            "support",
+            "pull",
+            "rotate",
+            "grasp"
+        ]
+    },
+    {
+        "model_cat": "Wine",
+        "affordances": [
+            "contain",
+            "drinkable",
+            "grasp",
+            "lift",
+            "pourable",
+            "sealable"
+        ]
+    },
+    {
+        "model_cat": "Yogurt",
+        "affordances": [
+            "consumable",
+            "grasp",
+            "hold",
+            "mixable",
+            "openable",
+            "pourable",
+            "scoopable",
+            "spreadable"
+        ]
+    }
+]

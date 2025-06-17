@@ -1,0 +1,50 @@
+{
+  "episodes": [
+    {
+      "episode_id": 1,
+      "filename": "demo_20250407-171343_1.h5",
+      "num_actions": 103,
+      "timestamp": 1744038823.7674453,
+      "reset_kwargs": {
+        "seed": 1
+      }
+    },
+    {
+      "episode_id": 2,
+      "filename": "demo_20250407-171349_2.h5",
+      "num_actions": 71,
+      "timestamp": 1744038829.0831974,
+      "reset_kwargs": {
+        "seed": 2
+      }
+    },
+    {
+      "episode_id": 3,
+      "filename": "demo_20250407-171357_3.h5",
+      "num_actions": 165,
+      "timestamp": 1744038837.7591307,
+      "reset_kwargs": {
+        "seed": 3
+      }
+    },
+    {
+      "episode_id": 1,
+      "filename": "demo_20250408-121716_1.h5",
+      "num_actions": 10,
+      "timestamp": 1744107436.641761,
+      "reset_kwargs": {
+        "seed": 1
+      }
+    },
+    {
+      "episode_id": 1,
+      "filename": "demo_20250408-125140_1.h5",
+      "num_actions": 25,
+      "timestamp": 1744109500.9902809,
+      "reset_kwargs": {
+        "seed": 1
+      }
+    }
+  ],
+  "version": "1.0"
+}

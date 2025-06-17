@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quest 3 Controller Tracker (VR Only) - Debug Enhanced</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- No script tags in the head - we'll use ES modules -->
+</head>
+
+<body>
+    <div id="overlay-content" style="position:absolute; z-index:1000; pointer-events:none;">
+        <!-- DOM overlay content for AR mode -->
+        <div style="position:fixed; bottom:10px; left:10px; background:rgba(0,0,0,0.5); color:white; padding:5px;">
+            <div id="overlay-status">Passthrough Mode</div>
+        </div>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div id="container">
+        <h1>Quest 3 Controller Tracker (VR Only)</h1>
+        <div class="nav-links" style="margin-bottom: 20px;">
+            <a href="index.html" style="display: inline-block; background-color: #4285f4; color: white; padding: 8px 16px; margin-right: 10px; text-decoration: none; border-radius: 4px; font-weight: bold;">WebXR App</a>
+            <a href="websocket-debug.html" style="display: inline-block; background-color: #34a853; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; font-weight: bold;">WebSocket Debug Tool</a>
+        </div>
+        <h2>Debug Enhanced Edition</h2>
+        <div class="debug-features">
+            <ul>
+                <li>Controller trail visualization</li>
+                <li>Change cube spin speed with trigger pressure</li>
+                <li>Color-changing controller indicators</li>
+                <li>Detailed button state tracking</li>
+            </ul>
+        </div>
+        <button id="vr-button">Enter VR</button>
+        <div id="status">Initializing...</div>
+        <div class="data-section">
+            <div class="data-title">Left Controller:</div>
+            <div id="left-controller" class="controllers-data">No data available</div>
+        </div>
+        <div class="data-section">
+            <div class="data-title">Right Controller:</div>
+            <div id="right-controller" class="controllers-data">No data available</div>
+        </div>
+        <div class="data-section">
+            <div class="data-title">Raw Data (for Python):</div>
+            <div id="raw-data" class="controllers-data">No data available</div>
+        </div>
+    </div>
+
+    <div id="debug-log"></div>
+
+    <!-- Main entry point for ES modules -->
+    <script type="module" src="js/main.js"></script>
+</body>
+
+</html>
