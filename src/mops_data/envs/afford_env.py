@@ -20,7 +20,12 @@ class AffordEnv(BaseEnv):
     SUPPORTED_ROBOTS = ["panda", "fetch"]
 
     def __init__(
-        self, *args, robot_uids="panda", robot_init_qpos_noise=0.02, np_rng=None, **kwargs
+        self,
+        *args,
+        robot_uids="panda",
+        robot_init_qpos_noise=0.02,
+        np_rng=None,
+        **kwargs
     ):
         self.robot_init_qpos_noise = robot_init_qpos_noise
 

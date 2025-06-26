@@ -212,3 +212,4 @@ data/
 *.npy
 datasets/
 xr/robot_bridge/demos/
+*.h5
