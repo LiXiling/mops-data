@@ -554,11 +554,12 @@ if __name__ == "__main__":
         import mops_data.asset_manager.anno_handler as mops_ah
 
         df = mops_ah.load_annotations().partnet_mobility_df
+        df = df.groupby("model_id").first().reset_index()
 
         # Create a small subset for testing
         subset_classes = ["Chair", "Table"]
         test_df = (
-            df[df["model_cat"].isin(subset_classes)].head(20).reset_index(drop=True)
+            df[df["model_cat"].isin(subset_classes)].head(5).reset_index(drop=True)
         )
 
         config = SingleObjectDatasetConfig(

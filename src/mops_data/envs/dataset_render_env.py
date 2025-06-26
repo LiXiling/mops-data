@@ -265,8 +265,6 @@ class DatasetRenderEnv(BaseEnv):
                 normal = normal.cpu().numpy()
             if len(normal.shape) == 4:  # batch dimension
                 normal = normal[0]
-            # Normalize normal map from [-1, 1] to [0, 1] for storage
-            normal = (normal + 1) / 2
             result["normal"] = normal.astype(np.float32)
 
         # Extract segmentation masks
@@ -274,7 +272,7 @@ class DatasetRenderEnv(BaseEnv):
             seg = camera_obs["segmentation"]
             if hasattr(seg, "cpu"):
                 seg = seg.cpu().numpy()
-            if len(seg.shape) == 3:  # batch dimension
+            if len(seg.shape) == 4:  # batch dimension
                 seg = seg[0]
             result["semantic_mask"] = seg.astype(np.uint8)
 
@@ -283,7 +281,7 @@ class DatasetRenderEnv(BaseEnv):
             class_seg = camera_obs["class_segmentation"]
             if hasattr(class_seg, "cpu"):
                 class_seg = class_seg.cpu().numpy()
-            if len(class_seg.shape) == 3:  # batch dimension
+            if len(class_seg.shape) == 4:  # batch dimension
                 class_seg = class_seg[0]
             result["class_mask"] = class_seg.astype(np.uint8)
 
@@ -298,6 +296,8 @@ class DatasetRenderEnv(BaseEnv):
             if afford_seg.shape[-1] > 1:
                 afford_seg = afford_seg.argmax(axis=-1)
             result["affordance_mask"] = afford_seg.astype(np.uint8)
+
+        # TODO: Part Classification!!!
 
         # Extract affordance masks from augmentor if available
         if "affordance_masks" in obs:
@@ -318,14 +318,6 @@ class DatasetRenderEnv(BaseEnv):
                 if len(afford_mask.shape) == 3:  # batch dimension
                     afford_mask = afford_mask[0]
                 result["affordance_mask"] = afford_mask.astype(np.uint8)
-
-        # Ensure we have at least an image and semantic mask
-        if "image" not in result:
-            raise ValueError("No RGB image found in observations")
-        if "semantic_mask" not in result:
-            # Create a dummy semantic mask if not available
-            h, w = result["image"].shape[:2]
-            result["semantic_mask"] = np.ones((h, w), dtype=np.uint8)
 
         return result
 
