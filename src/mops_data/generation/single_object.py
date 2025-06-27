@@ -115,7 +115,7 @@ class BalancedDatasetPipeline:
 
         self._print_dataset_plan()
 
-    def _is_viewpoint_valid(self, segmentation_mask: np.ndarray) -> Tuple[bool, Dict]:
+    def _is_viewpoint_valid(self, segmentation_mask: np.ndarray) -> bool:
         """
         Check if segmentation mask shows good object coverage
 
@@ -125,47 +125,11 @@ class BalancedDatasetPipeline:
         Returns:
             (is_valid, metrics_dict)
         """
-        # Handle different mask shapes
-        if len(segmentation_mask.shape) == 3:
-            if segmentation_mask.shape[0] == 1:
-                segmentation_mask = segmentation_mask[0]
-            elif segmentation_mask.shape[2] == 1:
-                segmentation_mask = segmentation_mask[:, :, 0]
-            else:
-                segmentation_mask = np.argmax(segmentation_mask, axis=-1)
 
         unique_values = np.unique(segmentation_mask)
         num_segments = len(unique_values)
 
-        # Calculate object coverage
-        total_pixels = segmentation_mask.size
-        background_pixels = np.sum(segmentation_mask == 0) if 0 in unique_values else 0
-        object_pixels = total_pixels - background_pixels
-        object_coverage = object_pixels / total_pixels if total_pixels > 0 else 0
-
-        # Filter out tiny segments (noise)
-        meaningful_segments = 0
-        if object_pixels > 0:
-            min_segment_size = max(1, object_pixels * 0.01)  # 1% of object
-            for val in unique_values:
-                if val != 0:  # Skip background
-                    size = np.sum(segmentation_mask == val)
-                    if size >= min_segment_size:
-                        meaningful_segments += 1
-
-        metrics = {
-            "num_segments": num_segments,
-            "meaningful_segments": meaningful_segments,
-            "object_coverage": object_coverage,
-        }
-
-        # Validation criteria
-        is_valid = (
-            meaningful_segments >= self.config.min_segments_threshold
-            and object_coverage > 0.1  # At least 10% object coverage
-        )
-
-        return is_valid, metrics
+        return num_segments >= self.config.min_segments_threshold
 
     def _generate_fallback_viewpoint(self, attempt: int) -> Dict:
         """Generate a randomized fallback viewpoint"""
@@ -394,9 +358,7 @@ class BalancedDatasetPipeline:
 
                 # Check if viewpoint is valid
                 if "semantic_mask" in result:
-                    is_valid, metrics = self._is_viewpoint_valid(
-                        result["semantic_mask"]
-                    )
+                    is_valid = self._is_viewpoint_valid(result["semantic_mask"])
 
                     if is_valid or attempt == self.config.max_fallback_attempts:
                         # Either valid or this is our last attempt

@@ -209,115 +209,65 @@ class DatasetRenderEnv(BaseEnv):
         """
         Extract render data from observations in the format expected by HDF5Writer.
 
+        Correct mapping:
+        - rgb, depth, normal: from base camera
+        - segmentation: part segmentation from base camera
+        - class_segmentation: semantic segmentation (added by obs augmentor)
+        - instance_segmentation: instance segmentation (added by obs augmentor)
+        - affordance_segmentation: affordance segmentation (added by obs augmentor)
+
         Args:
             obs: Observation dictionary from environment step/reset
 
         Returns:
             Dictionary containing:
             - 'image': RGB image (H, W, 3)
-            - 'semantic_mask': Semantic segmentation mask (H, W)
-            - 'part_mask': Part segmentation mask (H, W) if available
-            - 'affordance_mask': Affordance mask (H, W) if available
-            - 'depth': Depth map (H, W) if available
-            - 'normal': Normal map (H, W, 3) if available
+            - 'semantic_mask': Semantic segmentation mask (H, W, 1)
+            - 'part_mask': Part segmentation mask (H, W, 1)
+            - 'instance_mask': Instance mask (H, W, 1)
+            - 'affordance_mask': Affordance mask (H, W, 1)
+            - 'depth': Depth map (H, W, 1)
+            - 'normal': Normal map (H, W, 3)
         """
         result = {}
 
-        # Extract camera observations - using standard camera name
-        camera_obs = None
-        if "sensor_data" in obs:
-            # Look for common camera names
-            for cam_name in ["base_camera", "fetch_head", "camera"]:
-                if cam_name in obs["sensor_data"]:
-                    camera_obs = obs["sensor_data"][cam_name]
-                    break
-        elif "base_camera" in obs:
-            # Direct camera access
-            camera_obs = obs["base_camera"]
+        # Get camera observations - assume base_camera
+        camera_obs = obs["sensor_data"]["base_camera"]
 
-        if camera_obs is None:
-            raise ValueError("No camera observations found in obs")
-
-        # Extract RGB image
+        # Extract RGB image - remove batch dimension [0] and convert to uint8
         if "rgb" in camera_obs:
-            rgb = camera_obs["rgb"]
-            if hasattr(rgb, "cpu"):  # torch tensor
-                rgb = rgb.cpu().numpy()
-            if len(rgb.shape) == 4:  # batch dimension
-                rgb = rgb[0]
-            if rgb.dtype != np.uint8:
-                rgb = (rgb.clip(0, 1) * 255).astype(np.uint8)
+            rgb = camera_obs["rgb"].cpu()[0]  # (H, W, 3)
             result["image"] = rgb
 
-        # Extract depth if available
+        # Extract depth - remove batch dimension, keep as (H, W, 1)
         if "depth" in camera_obs:
-            depth = camera_obs["depth"]
-            if hasattr(depth, "cpu"):
-                depth = depth.cpu().numpy()
-            if len(depth.shape) == 3:  # batch dimension
-                depth = depth[0]
-            result["depth"] = depth.astype(np.float32)
+            depth = camera_obs["depth"].cpu()[0]  # (H, W, 1)
+            result["depth"] = depth
 
         # Extract normal map if available
         if "normal" in camera_obs:
-            normal = camera_obs["normal"]
-            if hasattr(normal, "cpu"):
-                normal = normal.cpu().numpy()
-            if len(normal.shape) == 4:  # batch dimension
-                normal = normal[0]
-            result["normal"] = normal.astype(np.float32)
+            normal = camera_obs["normal"].cpu()[0]  # (H, W, 3)
+            result["normal"] = normal
 
-        # Extract segmentation masks
+        # Extract PART segmentation (the base "segmentation" from camera)
         if "segmentation" in camera_obs:
-            seg = camera_obs["segmentation"]
-            if hasattr(seg, "cpu"):
-                seg = seg.cpu().numpy()
-            if len(seg.shape) == 4:  # batch dimension
-                seg = seg[0]
-            result["semantic_mask"] = seg.astype(np.uint8)
+            part_seg = camera_obs["segmentation"].cpu()[0]
+            result["part_mask"] = part_seg
 
-        # Extract class segmentation if available
+        # Extract SEMANTIC segmentation (class_segmentation added by obs augmentor)
         if "class_segmentation" in camera_obs:
-            class_seg = camera_obs["class_segmentation"]
-            if hasattr(class_seg, "cpu"):
-                class_seg = class_seg.cpu().numpy()
-            if len(class_seg.shape) == 4:  # batch dimension
-                class_seg = class_seg[0]
-            result["class_mask"] = class_seg.astype(np.uint8)
+            semantic_seg = camera_obs["class_segmentation"].cpu()[0]
+            result["semantic_mask"] = semantic_seg
 
-        # Extract affordance segmentation if available
+        # Extract instance segmentation (added by obs augmentor)
+        if "instance_segmentation" in camera_obs:
+            instance_seg = camera_obs["instance_segmentation"].cpu()[0]
+            result["instance_mask"] = instance_seg
+
+        # Extract affordance segmentation (added by obs augmentor) - keep full shape (H, W, 1)
         if "affordance_segmentation" in camera_obs:
-            afford_seg = camera_obs["affordance_segmentation"]
-            if hasattr(afford_seg, "cpu"):
-                afford_seg = afford_seg.cpu().numpy()
-            if len(afford_seg.shape) == 4:  # batch dimension
-                afford_seg = afford_seg[0]
-            # Handle multi-channel affordance masks
-            if afford_seg.shape[-1] > 1:
-                afford_seg = afford_seg.argmax(axis=-1)
-            result["affordance_mask"] = afford_seg.astype(np.uint8)
-
-        # TODO: Part Classification!!!
-
-        # Extract affordance masks from augmentor if available
-        if "affordance_masks" in obs:
-            afford_masks = obs["affordance_masks"]
-
-            if "part_mask" in afford_masks:
-                part_mask = afford_masks["part_mask"]
-                if hasattr(part_mask, "cpu"):
-                    part_mask = part_mask.cpu().numpy()
-                if len(part_mask.shape) == 3:  # batch dimension
-                    part_mask = part_mask[0]
-                result["part_mask"] = part_mask.astype(np.uint8)
-
-            if "affordance_mask" in afford_masks:
-                afford_mask = afford_masks["affordance_mask"]
-                if hasattr(afford_mask, "cpu"):
-                    afford_mask = afford_mask.cpu().numpy()
-                if len(afford_mask.shape) == 3:  # batch dimension
-                    afford_mask = afford_mask[0]
-                result["affordance_mask"] = afford_mask.astype(np.uint8)
+            afford_seg = camera_obs["affordance_segmentation"].cpu()[0]  # (H, W, 1)
+            result["affordance_mask"] = afford_seg
 
         return result
 
