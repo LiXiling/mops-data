@@ -36,6 +36,10 @@ class SingleObjectDatasetConfig:
     camera_distance: float = 1.5
     obs_mode: str = "rgb+depth+segmentation+normal"
 
+    # Camera Fallback Parameters
+    min_segments_threshold: int = 2
+    max_fallback_attempts: int = 3
+
     # Generation parameters
     viewpoints: List[Dict] = None
     lighting_setups: List[Dict] = None
@@ -43,11 +47,14 @@ class SingleObjectDatasetConfig:
 
     def __post_init__(self):
         if self.viewpoints is None:
-            # Diverse viewpoints for good coverage
+            # More diverse viewpoints for better coverage
+            elevations = [10, 15, 20, 25, 30, 35, 40, 45]  # More elevation angles
+            azimuths = range(0, 360, 30)  # Every 30 degrees instead of 45
+
             self.viewpoints = [
                 {"elevation": elev, "azimuth": azim}
-                for elev in [10, 20, 30, 45]
-                for azim in range(0, 360, 45)  # Every 45 degrees
+                for elev in elevations
+                for azim in azimuths
             ]
 
         if self.lighting_setups is None:
@@ -67,10 +74,7 @@ class SingleObjectDatasetConfig:
 
 class BalancedDatasetPipeline:
     """
-    Pipeline for generating a balanced single object dataset using Gymnasium API.
-
-    This pipeline focuses on orchestrating the rendering process and delegates
-    all file I/O operations to the HDF5Writer.
+    Pipeline for generating a balanced single object dataset with camera fallback.
     """
 
     def __init__(self, config: SingleObjectDatasetConfig, partnet_mob_df: pd.DataFrame):
@@ -80,7 +84,6 @@ class BalancedDatasetPipeline:
         Args:
             config: Dataset configuration
             partnet_mob_df: DataFrame with PartNet_Mobility asset information.
-                           Should have columns: 'model_cat', 'model_id', and optionally 'dir_name'
         """
         self.config = config
         self.assets_df = partnet_mob_df
@@ -95,7 +98,90 @@ class BalancedDatasetPipeline:
         # Generate base variation combinations
         self.base_variations = self._generate_base_variations()
 
+        # Predefined good camera angles for fallback
+        self.fallback_viewpoints = [
+            {"elevation": 25, "azimuth": 45},  # Good diagonal views
+            {"elevation": 30, "azimuth": 135},
+            {"elevation": 20, "azimuth": 225},
+            {"elevation": 35, "azimuth": 315},
+            {"elevation": 15, "azimuth": 0},  # Cardinal directions
+            {"elevation": 15, "azimuth": 90},
+            {"elevation": 15, "azimuth": 180},
+            {"elevation": 15, "azimuth": 270},
+        ]
+
+        # Statistics tracking
+        self.fallback_stats = {"total_renders": 0, "fallback_used": 0}
+
         self._print_dataset_plan()
+
+    def _is_viewpoint_valid(self, segmentation_mask: np.ndarray) -> Tuple[bool, Dict]:
+        """
+        Check if segmentation mask shows good object coverage
+
+        Args:
+            segmentation_mask: 2D numpy array with segmentation data
+
+        Returns:
+            (is_valid, metrics_dict)
+        """
+        # Handle different mask shapes
+        if len(segmentation_mask.shape) == 3:
+            if segmentation_mask.shape[0] == 1:
+                segmentation_mask = segmentation_mask[0]
+            elif segmentation_mask.shape[2] == 1:
+                segmentation_mask = segmentation_mask[:, :, 0]
+            else:
+                segmentation_mask = np.argmax(segmentation_mask, axis=-1)
+
+        unique_values = np.unique(segmentation_mask)
+        num_segments = len(unique_values)
+
+        # Calculate object coverage
+        total_pixels = segmentation_mask.size
+        background_pixels = np.sum(segmentation_mask == 0) if 0 in unique_values else 0
+        object_pixels = total_pixels - background_pixels
+        object_coverage = object_pixels / total_pixels if total_pixels > 0 else 0
+
+        # Filter out tiny segments (noise)
+        meaningful_segments = 0
+        if object_pixels > 0:
+            min_segment_size = max(1, object_pixels * 0.01)  # 1% of object
+            for val in unique_values:
+                if val != 0:  # Skip background
+                    size = np.sum(segmentation_mask == val)
+                    if size >= min_segment_size:
+                        meaningful_segments += 1
+
+        metrics = {
+            "num_segments": num_segments,
+            "meaningful_segments": meaningful_segments,
+            "object_coverage": object_coverage,
+        }
+
+        # Validation criteria
+        is_valid = (
+            meaningful_segments >= self.config.min_segments_threshold
+            and object_coverage > 0.1  # At least 10% object coverage
+        )
+
+        return is_valid, metrics
+
+    def _generate_fallback_viewpoint(self, attempt: int) -> Dict:
+        """Generate a randomized fallback viewpoint"""
+        if attempt == 1:
+            # First fallback: use proven good angles (randomized)
+            base_viewpoint = np.random.choice(self.fallback_viewpoints).copy()
+            # Add small random perturbation
+            base_viewpoint["azimuth"] += np.random.uniform(-15, 15)
+            base_viewpoint["elevation"] += np.random.uniform(-5, 5)
+            return base_viewpoint
+        else:
+            # Subsequent fallbacks: completely random
+            return {
+                "elevation": np.random.uniform(15, 45),
+                "azimuth": np.random.uniform(0, 360),
+            }
 
     def _print_dataset_plan(self):
         """Print the dataset creation plan"""
@@ -105,6 +191,7 @@ class BalancedDatasetPipeline:
             f"Target: {self.config.target_train_images_per_class} train + {self.config.target_test_images_per_class} test images per class"
         )
         print(f"Classes: {len(self.balanced_plan)}")
+        print(f"Total viewpoints available: {len(self.base_variations)}")
 
         total_train = (
             len(self.balanced_plan) * self.config.target_train_images_per_class
@@ -116,7 +203,7 @@ class BalancedDatasetPipeline:
 
         print()
         print("Per-class breakdown:")
-        for class_name, plan in list(self.balanced_plan.items())[:5]:
+        for class_name, plan in list(self.balanced_plan.items())[:3]:
             print(f"  {class_name}:")
             print(
                 f"    Train: {plan['n_train_assets']} assets × {plan['train_images_per_asset']}(+{plan['train_remainder']}) = {plan['total_train_images']} images"
@@ -125,31 +212,26 @@ class BalancedDatasetPipeline:
                 f"    Test:  {plan['n_test_assets']} assets × {plan['test_images_per_asset']}(+{plan['test_remainder']}) = {plan['total_test_images']} images"
             )
 
-        if len(self.balanced_plan) > 5:
-            print(f"  ... and {len(self.balanced_plan) - 5} more classes")
+        if len(self.balanced_plan) > 3:
+            print(f"  ... and {len(self.balanced_plan) - 3} more classes")
 
     def _filter_classes(self) -> pd.DataFrame:
         """Filter classes to those with enough assets for proper splits"""
         df = self.assets_df.copy()
 
-        # Ensure we have the necessary columns
         if "model_cat" not in df.columns:
             raise ValueError(
                 "DataFrame must have 'model_cat' column for object categories"
             )
 
-        # Filter by class names if specified
         if self.config.classes_to_include:
             df = df[df["model_cat"].isin(self.config.classes_to_include)]
 
-        # Filter classes by minimum asset count
         class_counts = df["model_cat"].value_counts()
         valid_classes = class_counts[
             class_counts >= self.config.min_assets_per_class
         ].index
         df = df[df["model_cat"].isin(valid_classes)]
-
-        # Reset index to ensure we have clean indices for asset loading
         df = df.reset_index(drop=True)
 
         print(f"Filtered to {len(df)} assets across {len(valid_classes)} classes")
@@ -163,18 +245,15 @@ class BalancedDatasetPipeline:
             class_assets = self.filtered_df[self.filtered_df["model_cat"] == class_name]
             total_assets = len(class_assets)
 
-            # Calculate train/test asset split
             n_test_assets = max(1, int(total_assets * self.config.test_asset_ratio))
             n_train_assets = total_assets - n_test_assets
 
-            # Split assets into train/test
             train_assets, test_assets = train_test_split(
                 class_assets,
                 test_size=n_test_assets,
                 random_state=self.config.random_seed,
             )
 
-            # Calculate images per asset needed to reach target counts
             train_images_per_asset = max(
                 1, self.config.target_train_images_per_class // n_train_assets
             )
@@ -182,7 +261,6 @@ class BalancedDatasetPipeline:
                 1, self.config.target_test_images_per_class // n_test_assets
             )
 
-            # Handle remainder by adding extra images to some assets
             train_remainder = self.config.target_train_images_per_class % n_train_assets
             test_remainder = self.config.target_test_images_per_class % n_test_assets
 
@@ -225,23 +303,19 @@ class BalancedDatasetPipeline:
     def _sample_variations_for_asset(self, n_images: int) -> List[Dict]:
         """Sample n variations for a single asset, with repetition if needed"""
         if n_images <= len(self.base_variations):
-            # Sample without replacement
             indices = np.random.choice(
                 len(self.base_variations), size=n_images, replace=False
             )
             return [self.base_variations[i] for i in indices]
         else:
-            # Need to repeat some variations - add small random perturbations
             base_cycles = n_images // len(self.base_variations)
             remainder = n_images % len(self.base_variations)
 
             variations = []
 
-            # Add full cycles of base variations
             for cycle in range(base_cycles):
                 for base_var in self.base_variations:
                     var = base_var.copy()
-                    # Add small random perturbations to avoid exact duplicates
                     if cycle > 0:
                         var["viewpoint"] = var["viewpoint"].copy()
                         var["viewpoint"]["azimuth"] += np.random.uniform(-5, 5)
@@ -249,7 +323,6 @@ class BalancedDatasetPipeline:
                         var["lighting"]["intensity"] *= np.random.uniform(0.95, 1.05)
                     variations.append(var)
 
-            # Add remainder
             if remainder > 0:
                 indices = np.random.choice(
                     len(self.base_variations), size=remainder, replace=False
@@ -263,29 +336,21 @@ class BalancedDatasetPipeline:
             return variations
 
     def _create_render_env(self, asset_row: pd.Series, variation: Dict):
-        """
-        Create a fresh render environment for each asset using Gymnasium API.
-        This ensures clean loading without asset conflicts.
-        """
-        # Prepare environment kwargs
+        """Create a fresh render environment for each asset"""
         env_kwargs = {
             "render_mode": "rgb_array",
             "num_envs": 1,
             "obs_mode": self.config.obs_mode,
-            # Image configuration
             "image_size": self.config.image_size,
             "camera_distance": self.config.camera_distance,
             "camera_elevation": variation["viewpoint"]["elevation"],
             "camera_azimuth": variation["viewpoint"]["azimuth"],
-            # Lighting configuration
             "lighting_type": variation["lighting"]["type"],
             "lighting_intensity": variation["lighting"]["intensity"],
-            # Background configuration
             "background_type": variation["background"]["type"],
             "background_texture": variation["background"]["texture"],
         }
 
-        # Add asset specification - prefer dir_name, fallback to model_id, then index
         if "dir_name" in asset_row and pd.notna(asset_row["dir_name"]):
             env_kwargs["dir_name"] = asset_row["dir_name"]
         elif "model_id" in asset_row and pd.notna(asset_row["model_id"]):
@@ -293,37 +358,91 @@ class BalancedDatasetPipeline:
         else:
             env_kwargs["asset_index"] = asset_row.name
 
-        # Add model_cat if available
         if "model_cat" in asset_row and pd.notna(asset_row["model_cat"]):
             env_kwargs["model_cat"] = asset_row["model_cat"]
 
-        # Create environment using Gymnasium
         env = gym.make("DatasetRenderEnv-v1", **env_kwargs)
-
         return env
+
+    def _render_asset(
+        self, asset_row: pd.Series, variation: Dict
+    ) -> Dict[str, np.ndarray]:
+        """
+        Render a single asset with camera fallback system
+        """
+        self.fallback_stats["total_renders"] += 1
+        current_variation = variation.copy()
+
+        for attempt in range(self.config.max_fallback_attempts + 1):
+            env = self._create_render_env(asset_row, current_variation)
+
+            try:
+                # Reset and render
+                obs, info = env.reset(seed=0)
+                action = (
+                    np.zeros_like(env.action_space.sample())
+                    if hasattr(env.action_space, "sample")
+                    else None
+                )
+
+                for step in range(3):
+                    obs, reward, terminated, truncated, info = env.step(action)
+                    if terminated or truncated:
+                        break
+
+                result = env.extract_render_data(obs)
+
+                # Check if viewpoint is valid
+                if "semantic_mask" in result:
+                    is_valid, metrics = self._is_viewpoint_valid(
+                        result["semantic_mask"]
+                    )
+
+                    if is_valid or attempt == self.config.max_fallback_attempts:
+                        # Either valid or this is our last attempt
+                        if attempt > 0:
+                            self.fallback_stats["fallback_used"] += 1
+                        return result
+
+                    # Try fallback viewpoint
+                    fallback_viewpoint = self._generate_fallback_viewpoint(attempt + 1)
+                    current_variation["viewpoint"] = fallback_viewpoint
+                else:
+                    # No segmentation mask, return as-is
+                    return result
+
+            except Exception as e:
+                asset_id = (
+                    asset_row.get("dir_name")
+                    or asset_row.get("model_id")
+                    or asset_row.name
+                )
+                if attempt == self.config.max_fallback_attempts:
+                    print(
+                        f"Error rendering asset {asset_id} after {attempt + 1} attempts: {e}"
+                    )
+                    raise e
+                # Try again with fallback viewpoint
+                fallback_viewpoint = self._generate_fallback_viewpoint(attempt + 1)
+                current_variation["viewpoint"] = fallback_viewpoint
+            finally:
+                env.close()
+
+        # Should not reach here, but just in case
+        return result
 
     def _generate_images_for_class_split(
         self,
         writer: HDF5Writer,
         assets_df: pd.DataFrame,
         plan: Dict,
-        split: str,  # "train" or "test"
+        split: str,
         class_name: str,
     ):
-        """
-        Generate images for a specific class and split (train/test)
-
-        Args:
-            writer: HDF5Writer instance to handle I/O
-            assets_df: DataFrame containing assets for this split
-            plan: Plan dictionary for this class
-            split: "train" or "test"
-            class_name: Name of the class
-        """
+        """Generate images for a specific class and split"""
         images_per_asset = plan[f"{split}_images_per_asset"]
         remainder = plan[f"{split}_remainder"]
 
-        # Randomly select which assets get the extra images
         assets_with_extra = set()
         if remainder > 0:
             extra_indices = np.random.choice(
@@ -335,30 +454,23 @@ class BalancedDatasetPipeline:
         target_total = plan[f"total_{split}_images"]
 
         for asset_idx, (_, asset_row) in enumerate(assets_df.iterrows()):
-            # Determine how many images to generate for this asset
             n_images = images_per_asset
             if asset_idx in assets_with_extra:
                 n_images += 1
 
-            # Safety check: don't exceed target total
             if total_images_generated + n_images > target_total:
                 n_images = target_total - total_images_generated
                 if n_images <= 0:
                     break
 
-            # Get variations for this asset
             variations = self._sample_variations_for_asset(n_images)
 
-            # Generate images for each variation
             for variation in variations:
-                # Safety check: don't exceed target total
                 if total_images_generated >= target_total:
                     break
 
-                # Render the asset with this variation
                 render_data = self._render_asset(asset_row, variation)
 
-                # Prepare metadata
                 render_params = {
                     "split": split,
                     "variation": variation,
@@ -366,14 +478,12 @@ class BalancedDatasetPipeline:
                     "dataset_name": self.config.dataset_name,
                 }
 
-                # Get asset ID for metadata
                 asset_id = str(
                     asset_row.get(
                         "model_id", asset_row.get("dir_name", f"asset_{asset_idx}")
                     )
                 )
 
-                # Let the HDF5Writer handle all the I/O
                 writer.add_image(
                     image=render_data["image"],
                     semantic_mask=render_data["semantic_mask"],
@@ -391,70 +501,8 @@ class BalancedDatasetPipeline:
 
         print(f"    Generated {total_images_generated} {split} images for {class_name}")
 
-    def _render_asset(
-        self, asset_row: pd.Series, variation: Dict
-    ) -> Dict[str, np.ndarray]:
-        """
-        Render a single asset using a fresh DatasetRenderEnv via Gymnasium API.
-        Creates new environment for each asset to ensure clean loading.
-
-        Args:
-            asset_row: Row from assets DataFrame containing asset info
-            variation: Dictionary with rendering parameters (viewpoint, lighting, background)
-
-        Returns:
-            Dictionary containing rendered data:
-            - 'image': RGB image array (H, W, 3)
-            - 'semantic_mask': Semantic mask array (H, W)
-            - 'part_mask': Optional part mask array (H, W)
-            - 'instance_mask': Optional instance mask array (H, W)
-            - 'affordance_mask': Optional affordance mask array (H, W)
-            - 'depth': Optional depth map (H, W)
-            - 'normal': Optional normal map (H, W, 3)
-        """
-        # Create fresh environment for this specific asset and variation
-        env = self._create_render_env(asset_row, variation)
-
-        try:
-            # Reset environment to load the object and get fresh state
-            obs, info = env.reset(seed=0)
-
-            # Step a few times to let physics/lighting settle
-            # Use zero action (no action needed for static rendering)
-            action = (
-                np.zeros_like(env.action_space.sample())
-                if hasattr(env.action_space, "sample")
-                else None
-            )
-
-            for step in range(3):  # Match your original step count
-                obs, reward, terminated, truncated, info = env.step(action)
-                if terminated or truncated:
-                    break
-
-            # Extract rendered data from observations using the environment's method
-            result = env.extract_render_data(obs)
-
-            return result
-
-        except Exception as e:
-            asset_identifier = (
-                asset_row.get("dir_name") or asset_row.get("model_id") or asset_row.name
-            )
-            print(f"Error rendering asset {asset_identifier}: {e}")
-            raise e
-        finally:
-            # Always clean up the environment
-            env.close()
-
     def create_dataset(self):
-        """
-        Create the balanced dataset
-
-        This method orchestrates the entire dataset creation process,
-        using the HDF5Writer to handle all file I/O operations.
-        """
-        # Calculate actual total images based on the plan
+        """Create the balanced dataset"""
         total_images = 0
         for plan in self.balanced_plan.values():
             total_images += plan["total_train_images"] + plan["total_test_images"]
@@ -465,8 +513,6 @@ class BalancedDatasetPipeline:
         print(f"Estimated total images: {total_images}")
 
         try:
-            # Use HDF5Writer as context manager to handle file I/O
-            # Add some buffer to the estimate in case of variations in actual generation
             estimated_images = max(total_images, int(total_images * 1.2))
 
             with HDF5Writer(
@@ -475,13 +521,11 @@ class BalancedDatasetPipeline:
                 estimated_images,
             ) as writer:
 
-                # Process each class
                 for class_name in tqdm(self.balanced_plan.keys(), desc="Classes"):
                     plan = self.balanced_plan[class_name]
 
                     print(f"\nProcessing class: {class_name}")
 
-                    # Generate train images
                     print(f"  Generating {plan['total_train_images']} train images...")
                     self._generate_images_for_class_split(
                         writer,
@@ -491,7 +535,6 @@ class BalancedDatasetPipeline:
                         class_name,
                     )
 
-                    # Generate test images
                     print(f"  Generating {plan['total_test_images']} test images...")
                     self._generate_images_for_class_split(
                         writer,
@@ -505,43 +548,21 @@ class BalancedDatasetPipeline:
             print(f"Error during dataset creation: {e}")
             raise
 
+        # Print fallback statistics
+        total_renders = self.fallback_stats["total_renders"]
+        fallback_used = self.fallback_stats["fallback_used"]
+        fallback_rate = (
+            (fallback_used / total_renders * 100) if total_renders > 0 else 0
+        )
+
+        print()
+        print("=== CAMERA FALLBACK STATISTICS ===")
+        print(f"Total renders: {total_renders}")
+        print(f"Fallbacks used: {fallback_used} ({fallback_rate:.1f}%)")
+
         print()
         print("=== DATASET COMPLETE ===")
         print(f"File: {self.config.output_path}")
-
-
-# Example usage function
-def create_test_dataset(partnet_df: pd.DataFrame):
-    """
-    Create a test dataset with provided DataFrame
-
-    Args:
-        partnet_df: DataFrame with PartNet Mobility asset information
-                   Expected columns: 'model_cat', 'model_id', optionally 'dir_name'
-    """
-    config = SingleObjectDatasetConfig(
-        output_path="test_dataset.h5",
-        target_train_images_per_class=10,
-        target_test_images_per_class=5,
-        min_assets_per_class=3,
-        image_size=(256, 256),  # Smaller for faster testing
-        obs_mode="rgb+depth+segmentation+normal",
-        # Minimal variations for quick testing
-        viewpoints=[
-            {"elevation": 20, "azimuth": 0},
-            {"elevation": 20, "azimuth": 120},
-            {"elevation": 20, "azimuth": 240},
-        ],
-        lighting_setups=[
-            {"type": "studio", "intensity": 1.0},
-        ],
-        backgrounds=[
-            {"type": "white", "texture": None},
-        ],
-    )
-
-    pipeline = BalancedDatasetPipeline(config, partnet_df)
-    pipeline.create_dataset()
 
 
 if __name__ == "__main__":
@@ -557,18 +578,15 @@ if __name__ == "__main__":
         df = df.groupby("model_id").first().reset_index()
 
         # Create a small subset for testing
-        subset_classes = ["Chair", "Table"]
-        test_df = (
-            df[df["model_cat"].isin(subset_classes)].head(5).reset_index(drop=True)
-        )
+        # Sample30 random entries for quick testing
+        test_df = df.sample(n=200, random_state=42).reset_index(drop=True)
 
         config = SingleObjectDatasetConfig(
             output_path="test.h5",
-            target_train_images_per_class=2,
-            target_test_images_per_class=1,
-            min_assets_per_class=1,
-            image_size=(128, 128),  # Small for testing
-            obs_mode="rgb+segmentation",  # Minimal for faster testing
+            target_train_images_per_class=30,
+            target_test_images_per_class=15,
+            min_assets_per_class=10,
+            image_size=(512, 512),  # Small for testing
         )
 
         pipeline = BalancedDatasetPipeline(config, test_df)
