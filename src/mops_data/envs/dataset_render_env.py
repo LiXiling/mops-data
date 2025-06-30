@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import sapien
@@ -7,7 +7,6 @@ from mani_skill.envs.sapien_env import BaseEnv
 from mani_skill.sensors.camera import CameraConfig
 from mani_skill.utils import sapien_utils
 from mani_skill.utils.registration import register_env
-from mani_skill.utils.scene_builder.table import TableSceneBuilder
 
 from mops_data.asset_manager.object_annotation_registry import ObjectAnnotationRegistry
 from mops_data.asset_manager.partnet_mobility_loader import PartNetMobilityLoader
@@ -18,25 +17,22 @@ from mops_data.render.shader_config import RT_RGB_ONLY_CONFIG
 @register_env("DatasetRenderEnv-v1", max_episode_steps=1)
 class DatasetRenderEnv(BaseEnv):
     """
-    Specialized rendering environment for dataset generation.
+    Simplified rendering environment for dataset generation.
 
-    This environment is designed to:
-    1. Load a specific PartNet Mobility object
-    2. Configure camera, lighting, and background based on parameters
-    3. Render high-quality images with segmentation masks
-    4. Be efficient for batch dataset generation
+    Loads PartNet Mobility objects and renders them with configurable
+    camera, lighting, and background settings.
     """
 
-    SUPPORTED_ROBOTS = ["none"]  # No robot needed for dataset generation
+    SUPPORTED_ROBOTS = ["none"]
 
     def __init__(
         self,
         *args,
-        # Asset specification - use DataFrame column names
+        # Asset specification
         asset_index: Optional[int] = None,
-        asset_id: Optional[str] = None,  # This will be 'model_id' from DataFrame
-        dir_name: Optional[str] = None,  # This will be 'dir_name' from DataFrame
-        model_cat: Optional[str] = None,  # This will be 'model_cat' from DataFrame
+        asset_id: Optional[str] = None,
+        dir_name: Optional[str] = None,
+        model_cat: Optional[str] = None,
         # Rendering configuration
         image_size: Tuple[int, int] = (512, 512),
         camera_distance: float = 1.5,
@@ -45,18 +41,18 @@ class DatasetRenderEnv(BaseEnv):
         # Lighting configuration
         lighting_type: str = "studio",
         lighting_intensity: float = 1.0,
+        light_temperature: float = 5500.0,  # Kelvin (daylight ~5500K)
         # Background configuration
         background_type: str = "white",
         background_texture: Optional[str] = None,
         # Object configuration
         object_scale: float = 0.8,
         object_position: Optional[np.ndarray] = None,
-        # Observation mode
         **kwargs
     ):
-        # Store rendering parameters
+        # Store parameters
         self.asset_index = asset_index
-        self.asset_id = asset_id  # model_id
+        self.asset_id = asset_id
         self.dir_name = dir_name
         self.model_cat = model_cat
         self.image_size = image_size
@@ -65,6 +61,7 @@ class DatasetRenderEnv(BaseEnv):
         self.camera_azimuth = camera_azimuth
         self.lighting_type = lighting_type
         self.lighting_intensity = lighting_intensity
+        self.light_temperature = light_temperature
         self.background_type = background_type
         self.background_texture = background_texture
         self.object_scale = object_scale
@@ -85,18 +82,14 @@ class DatasetRenderEnv(BaseEnv):
             registry=self.object_annotation_registry
         )
 
-        # Store loaded object for reference
         self.loaded_object = None
 
-        # This calls self._load_scene() and creates all loaded objects
         super().__init__(*args, robot_uids="none", **kwargs)
 
     def _load_scene(self, options):
         """Load scene with the specified object"""
-
-        # Load the specified object
+        # Load object using available identifier
         if self.dir_name is not None:
-            # Use dir_name if available (most direct)
             self.loaded_object = self.partnet_mobility_loader.load(
                 self.dir_name,
                 self.object_position,
@@ -104,7 +97,6 @@ class DatasetRenderEnv(BaseEnv):
                 scale=self.object_scale,
             )
         elif self.asset_id is not None:
-            # Use model_id
             self.loaded_object = self.partnet_mobility_loader.load(
                 self.asset_id,
                 self.object_position,
@@ -112,7 +104,6 @@ class DatasetRenderEnv(BaseEnv):
                 scale=self.object_scale,
             )
         elif self.asset_index is not None:
-            # Use index-based loading
             self.loaded_object = self.partnet_mobility_loader.load_by_index(
                 self.asset_index,
                 self.object_position,
@@ -120,160 +111,155 @@ class DatasetRenderEnv(BaseEnv):
                 scale=self.object_scale,
             )
         else:
-            raise ValueError(
-                "Either asset_id, dir_name, or asset_index must be specified"
-            )
+            raise ValueError("Must specify one of: asset_id, dir_name, or asset_index")
 
-        # Configure lighting
-        self._setup_lighting()
-
-        # Configure background
-        self._setup_background()
-
-        # Register objects for segmentation
         self.object_annotation_registry.register_missing_objects(self)
 
-    def _setup_lighting(self):
-        """Configure lighting based on lighting_type and intensity"""
-        # Remove existing lights if needed
-        # Note: Be careful about removing default scene lighting
+    def _kelvin_to_rgb(self, temperature: float) -> np.ndarray:
+        """
+        Convert color temperature in Kelvin to RGB values.
+        Based on Tanner Helland's algorithm.
+
+        Args:
+            temperature: Color temperature in Kelvin (1000-40000)
+
+        Returns:
+            RGB array normalized to [0,1]
+        """
+        # Clamp temperature to reasonable range
+        temp = np.clip(temperature, 1000, 40000) / 100.0
+
+        # Calculate Red
+        if temp <= 66:
+            red = 255
+        else:
+            red = temp - 60
+            red = 329.698727446 * (red**-0.1332047592)
+            red = np.clip(red, 0, 255)
+
+        # Calculate Green
+        if temp <= 66:
+            green = temp
+            green = 99.4708025861 * np.log(green) - 161.1195681661
+        else:
+            green = temp - 60
+            green = 288.1221695283 * (green**-0.0755148492)
+        green = np.clip(green, 0, 255)
+
+        # Calculate Blue
+        if temp >= 66:
+            blue = 255
+        else:
+            if temp <= 19:
+                blue = 0
+            else:
+                blue = temp - 10
+                blue = 138.5177312231 * np.log(blue) - 305.0447927307
+                blue = np.clip(blue, 0, 255)
+
+        return np.array([red, green, blue]) / 255.0
+
+    def _load_lighting(self, options):
+        """Override lighting setup with temperature control"""
+        # Get RGB color from temperature
+        light_color = (
+            self._kelvin_to_rgb(self.light_temperature) * self.lighting_intensity
+        )
 
         if self.lighting_type == "studio":
-            # Studio lighting setup - multiple directional lights
-            # Key light
+            # Studio setup with directional light and warm ambient
             self.scene.add_directional_light(
-                direction=[0.5, -1, -0.5],
-                color=np.asarray([1, 1, 1]) * self.lighting_intensity,
+                [0.5, -1, -0.5], light_color.tolist(), shadow=True
             )
-            # Fill light
-            self.scene.add_directional_light(
-                direction=[-0.5, -1, -0.5],
-                color=np.asarray([0.6, 0.6, 0.8]) * self.lighting_intensity * 0.5,
+            ambient_color = (
+                self._kelvin_to_rgb(self.light_temperature + 1000)
+                * self.lighting_intensity
+                * 0.2
             )
-            # Rim light
-            self.scene.add_directional_light(
-                direction=[0, 1, -1],
-                color=np.asarray([1, 0.9, 0.8]) * self.lighting_intensity * 0.3,
-            )
+            self.scene.ambient_light = ambient_color.tolist()
 
         elif self.lighting_type == "natural":
-            # Natural lighting - single strong directional light (sun)
+            # Natural lighting (sun)
             self.scene.add_directional_light(
-                direction=[0.3, -1, -0.7],
-                color=np.asarray([1, 0.95, 0.9]) * self.lighting_intensity,
+                [0.3, -1, -0.7], light_color.tolist(), shadow=True
             )
-            # Ambient light
-            self.scene.set_ambient_light(
-                np.asarray([0.2, 0.2, 0.3]) * self.lighting_intensity * 0.3
+            # Sky-like ambient (cooler)
+            ambient_color = (
+                self._kelvin_to_rgb(self.light_temperature + 2000)
+                * self.lighting_intensity
+                * 0.3
             )
+            self.scene.ambient_light = ambient_color.tolist()
 
         elif self.lighting_type == "dramatic":
-            # Dramatic lighting - strong single light source
+            # Strong single light source
             self.scene.add_directional_light(
-                direction=[1, -1, -0.2],
-                color=np.asarray([1, 0.9, 0.7]) * self.lighting_intensity,
+                [1, -1, -0.2], light_color.tolist(), shadow=True
             )
-            # Minimal ambient
-            self.scene.set_ambient_light(
-                np.asarray([0.1, 0.1, 0.15]) * self.lighting_intensity * 0.2
+            # Minimal warm ambient
+            ambient_color = (
+                self._kelvin_to_rgb(self.light_temperature - 500)
+                * self.lighting_intensity
+                * 0.1
             )
-
-    def _setup_background(self):
-        """Configure background based on background_type"""
-        if self.background_type == "white":
-            # Pure white background - often handled by renderer
-            pass
-
-        elif self.background_type == "wood_floor":
-            # Wood floor texture
-            if self.background_texture:
-                # Load and apply wood texture
-                pass  # Implement texture loading based on your asset system
-
-        elif self.background_type == "concrete_floor":
-            # Concrete floor texture
-            if self.background_texture:
-                # Load and apply concrete texture
-                pass  # Implement texture loading based on your asset system
+            self.scene.ambient_light = ambient_color.tolist()
 
     def _get_obs_with_sensor_data(self, info, apply_texture_transforms=True):
         """Get observations with affordance augmentation"""
         obs = super()._get_obs_with_sensor_data(info, apply_texture_transforms)
-
-        # Apply affordance augmentation
-        augmented_obs = self.afford_augmentor.augment(self, obs)
-
-        return augmented_obs
+        return self.afford_augmentor.augment(self, obs)
 
     def extract_render_data(self, obs: Dict) -> Dict[str, np.ndarray]:
         """
-        Extract render data from observations in the format expected by HDF5Writer.
-
-        Correct mapping:
-        - rgb, depth, normal: from base camera
-        - segmentation: part segmentation from base camera
-        - class_segmentation: semantic segmentation (added by obs augmentor)
-        - instance_segmentation: instance segmentation (added by obs augmentor)
-        - affordance_segmentation: affordance segmentation (added by obs augmentor)
-
-        Args:
-            obs: Observation dictionary from environment step/reset
+        Extract render data from observations for HDF5Writer.
 
         Returns:
-            Dictionary containing:
-            - 'image': RGB image (H, W, 3)
-            - 'semantic_mask': Semantic segmentation mask (H, W, 1)
-            - 'part_mask': Part segmentation mask (H, W, 1)
-            - 'instance_mask': Instance mask (H, W, 1)
-            - 'affordance_mask': Affordance mask (H, W, 1)
-            - 'depth': Depth map (H, W, 1)
-            - 'normal': Normal map (H, W, 3)
+            Dictionary with keys: 'image', 'semantic_mask', 'part_mask',
+            'instance_mask', 'affordance_mask', 'depth', 'normal'
         """
         result = {}
-
-        # Get camera observations - assume base_camera
         camera_obs = obs["sensor_data"]["base_camera"]
 
-        # Extract RGB image - remove batch dimension [0] and convert to uint8
+        # Extract data, removing batch dimension [0]
         if "rgb" in camera_obs:
-            rgb = camera_obs["rgb"].cpu()[0]  # (H, W, 3)
-            result["image"] = rgb
-
-        # Extract depth - remove batch dimension, keep as (H, W, 1)
+            result["image"] = camera_obs["rgb"].cpu()[0]
         if "depth" in camera_obs:
-            depth = camera_obs["depth"].cpu()[0]  # (H, W, 1)
-            result["depth"] = depth
-
-        # Extract normal map if available
+            result["depth"] = camera_obs["depth"].cpu()[0]
         if "normal" in camera_obs:
-            normal = camera_obs["normal"].cpu()[0]  # (H, W, 3)
-            result["normal"] = normal
-
-        # Extract PART segmentation (the base "segmentation" from camera)
+            result["normal"] = camera_obs["normal"].cpu()[0]
         if "segmentation" in camera_obs:
-            part_seg = camera_obs["segmentation"].cpu()[0]
-            result["part_mask"] = part_seg
-
-        # Extract SEMANTIC segmentation (class_segmentation added by obs augmentor)
+            result["part_mask"] = camera_obs["segmentation"].cpu()[0]
         if "class_segmentation" in camera_obs:
-            semantic_seg = camera_obs["class_segmentation"].cpu()[0]
-            result["semantic_mask"] = semantic_seg
-
-        # Extract instance segmentation (added by obs augmentor)
+            result["semantic_mask"] = camera_obs["class_segmentation"].cpu()[0]
         if "instance_segmentation" in camera_obs:
-            instance_seg = camera_obs["instance_segmentation"].cpu()[0]
-            result["instance_mask"] = instance_seg
-
-        # Extract affordance segmentation (added by obs augmentor) - keep full shape (H, W, 1)
+            result["instance_mask"] = camera_obs["instance_segmentation"].cpu()[0]
         if "affordance_segmentation" in camera_obs:
-            afford_seg = camera_obs["affordance_segmentation"].cpu()[0]  # (H, W, 1)
-            result["affordance_mask"] = afford_seg
+            result["affordance_mask"] = camera_obs["affordance_segmentation"].cpu()[0]
 
         return result
 
+    def is_valid_render(self, obs: Dict, min_segments: int = 3) -> bool:
+        """
+        Check if render is valid based on part segmentation complexity.
+
+        Args:
+            obs: Observation dictionary
+            min_segments: Minimum number of unique segmentation values required
+
+        Returns:
+            True if render has sufficient segmentation detail
+        """
+        camera_obs = obs["sensor_data"]["base_camera"]
+        if "segmentation" not in camera_obs:
+            return True  # No segmentation to validate
+
+        part_mask = camera_obs["segmentation"].cpu()[0]
+        unique_values = np.unique(part_mask)
+        return len(unique_values) >= min_segments
+
     @property
     def _default_sensor_configs(self):
-        """Configure cameras based on current parameters"""
+        """Configure camera based on current parameters"""
         # Calculate camera position from spherical coordinates
         elevation_rad = np.radians(self.camera_elevation)
         azimuth_rad = np.radians(self.camera_azimuth)
@@ -283,34 +269,25 @@ class DatasetRenderEnv(BaseEnv):
         z = self.camera_distance * np.sin(elevation_rad)
 
         camera_pos = self.object_position + np.array([x, y, z])
-
-        # Camera looks at the object
         pose = sapien_utils.look_at(eye=camera_pos, target=self.object_position)
 
-        configs = [
+        return [
             CameraConfig(
                 "base_camera",
                 pose=pose,
                 width=self.image_size[0],
                 height=self.image_size[1],
-                fov=np.pi / 3,  # 60 degree FOV
+                fov=np.pi / 3,
+            ),
+            CameraConfig(
+                "base_camera_rt",
+                pose=pose,
+                width=self.image_size[0],
+                height=self.image_size[1],
+                fov=np.pi / 3,
+                shader_config=RT_RGB_ONLY_CONFIG,
             ),
         ]
-
-        # Add RT camera if needed
-        if "rt" in self.obs_mode.lower():
-            configs.append(
-                CameraConfig(
-                    "base_camera_rt",
-                    pose=pose,
-                    width=self.image_size[0],
-                    height=self.image_size[1],
-                    fov=np.pi / 3,
-                    shader_config=RT_RGB_ONLY_CONFIG,
-                )
-            )
-
-        return configs
 
     @property
     def _default_human_render_camera_configs(self):
@@ -319,25 +296,23 @@ class DatasetRenderEnv(BaseEnv):
         return CameraConfig("render_camera", pose=pose, width=512, height=512, fov=1)
 
     def _load_agent(self, options: dict):
-        """No agent needed for dataset generation"""
+        """No agent needed"""
         pass
 
     def _initialize_episode(self, env_idx, options):
-        """Initialize episode - no special initialization needed"""
+        """No special initialization needed"""
         pass
 
     def compute_dense_reward(self, obs: Any, action: torch.Tensor, info: Dict):
-        """No reward needed for dataset generation"""
+        """No reward needed"""
         return torch.zeros(self.num_envs, device=self.device)
 
     def compute_normalized_dense_reward(
         self, obs: Any, action: torch.Tensor, info: Dict
     ):
-        """No reward needed for dataset generation"""
+        """No reward needed"""
         return torch.zeros(self.num_envs, device=self.device)
 
     def _get_obs_agent(self):
-        """Get observations about the agent's state. By default it is proprioceptive observations which include qpos and qvel.
-        Controller state is also included although most default controllers do not have any state.
-        """
+        """No agent observations needed"""
         return torch.zeros(self.num_envs, device=self.device)
