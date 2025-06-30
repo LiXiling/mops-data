@@ -11,6 +11,37 @@ from tqdm import tqdm
 from mops_data.generation.hdf_writer import HDF5Writer
 
 
+def generate_simple_front_biased_viewpoints(
+    n_viewpoints: int, random_seed: int = None
+) -> List[Dict]:
+    """
+    Very simple version: just sample randomly within front-biased ranges.
+
+    Args:
+        n_viewpoints: Number of viewpoints to generate
+        random_seed: Optional seed for reproducibility
+
+    Returns:
+        List of viewpoint dictionaries
+    """
+    if random_seed is not None:
+        np.random.seed(random_seed)
+
+    viewpoints = []
+
+    for _ in range(n_viewpoints):
+        # Elevation: 10-40 degrees (avoid top-down and ground level)
+        elevation = np.random.uniform(-30, 30)
+
+        # Azimuth: front 120-degree arc centered on 0
+        # This gives us -60 to +60 degrees as you suggested
+        azimuth = np.random.uniform(-60, 60)
+
+        viewpoints.append({"elevation": elevation, "azimuth": azimuth})
+
+    return viewpoints
+
+
 @dataclass
 class SingleObjectDatasetConfig:
     """Configuration for single object dataset generation."""
@@ -48,13 +79,7 @@ class SingleObjectDatasetConfig:
     def __post_init__(self):
         if self.viewpoints is None:
             # Diverse viewpoints for good coverage
-            elevations = [10, 15, 20, 25, 30, 35, 40, 45]
-            azimuths = range(0, 360, 30)  # Every 30 degrees
-            self.viewpoints = [
-                {"elevation": elev, "azimuth": azim}
-                for elev in elevations
-                for azim in azimuths
-            ]
+            self.viewpoints = generate_simple_front_biased_viewpoints(n_viewpoints=48)
 
         if self.lighting_types is None:
             self.lighting_types = ["studio", "natural", "dramatic"]
@@ -223,6 +248,7 @@ class BalancedDatasetPipeline:
             "lighting_type": variation["lighting"]["type"],
             "lighting_intensity": variation["lighting"]["intensity"],
             "light_temperature": variation["lighting"]["temperature"],
+            "sensor_configs": dict(shader_pack="rt"),
         }
 
         # Set asset identifier

@@ -273,14 +273,14 @@ class DatasetRenderEnv(BaseEnv):
                 height=self.image_size[1],
                 fov=np.pi / 3,
             ),
-            CameraConfig(
-                "base_camera_rt",
-                pose=pose,
-                width=self.image_size[0],
-                height=self.image_size[1],
-                fov=np.pi / 3,
-                shader_config=RT_RGB_ONLY_CONFIG,
-            ),
+            # CameraConfig(
+            #     "base_camera_rt",
+            #     pose=pose,
+            #     width=self.image_size[0],
+            #     height=self.image_size[1],
+            #     fov=np.pi / 3,
+            #     shader_config=RT_RGB_ONLY_CONFIG,
+            # ),
         ]
 
     @property
