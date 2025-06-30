@@ -35,6 +35,7 @@ class SingleObjectDatasetConfig:
 
     # Validation
     min_segments_threshold: int = 3
+    max_resampling_attempts: int = 3  # Max attempts to get valid render
 
     # Lighting variation ranges
     light_temp_range: Tuple[float, float] = (2700, 8000)  # Warm to cool daylight
@@ -250,38 +251,97 @@ class BalancedDatasetPipeline:
     def _render_asset(
         self, asset_row: pd.Series, variation: Dict
     ) -> Dict[str, np.ndarray]:
-        """Render a single asset with validation"""
-        env = self._create_render_env(asset_row, variation)
+        """Render a single asset with validation and resampling for low quality"""
+        current_variation = variation.copy()
 
-        try:
-            obs, info = env.reset(seed=0)
+        for attempt in range(self.config.max_resampling_attempts):
+            env = self._create_render_env(asset_row, current_variation)
 
-            # Step environment a few times for stability
-            action = (
-                np.zeros_like(env.action_space.sample())
-                if hasattr(env.action_space, "sample")
-                else None
-            )
-            for _ in range(3):
-                obs, reward, terminated, truncated, info = env.step(action)
-                if terminated or truncated:
-                    break
+            try:
+                obs, info = env.reset(seed=0)
 
-            # Validate render quality
-            if not env.unwrapped.is_valid_render(
-                obs, min_segments=self.config.min_segments_threshold
-            ):
+                # Step environment a few times for stability
+                action = (
+                    np.zeros_like(env.action_space.sample())
+                    if hasattr(env.action_space, "sample")
+                    else None
+                )
+                for _ in range(3):
+                    obs, reward, terminated, truncated, info = env.step(action)
+                    if terminated or truncated:
+                        break
+
+                # Validate render quality
+                if env.unwrapped.is_valid_render(
+                    obs, min_segments=self.config.min_segments_threshold
+                ):
+                    return env.unwrapped.extract_render_data(obs)
+                else:
+                    # Low quality render - try again with new variation
+                    if attempt < self.config.max_resampling_attempts - 1:
+                        asset_id = (
+                            asset_row.get("dir_name")
+                            or asset_row.get("model_id")
+                            or asset_row.name
+                        )
+                        print(
+                            f"Low quality render for asset {asset_id}, attempt {attempt + 1}, resampling..."
+                        )
+
+                        # Generate new variation with different viewpoint and lighting
+                        new_base_variation = np.random.choice(self.base_variations)
+                        current_variation = new_base_variation.copy()
+                        current_variation["lighting"] = self._sample_random_lighting()
+
+                        # Add some randomization to viewpoint
+                        current_variation["viewpoint"] = current_variation[
+                            "viewpoint"
+                        ].copy()
+                        current_variation["viewpoint"]["azimuth"] += np.random.uniform(
+                            -30, 30
+                        )
+                        current_variation["viewpoint"][
+                            "elevation"
+                        ] += np.random.uniform(-10, 10)
+                        current_variation["viewpoint"]["elevation"] = np.clip(
+                            current_variation["viewpoint"]["elevation"], 5, 60
+                        )
+                    else:
+                        # Final attempt failed, use what we have
+                        asset_id = (
+                            asset_row.get("dir_name")
+                            or asset_row.get("model_id")
+                            or asset_row.name
+                        )
+                        print(
+                            f"Warning: Using low quality render for asset {asset_id} after {attempt + 1} attempts"
+                        )
+                        return env.unwrapped.extract_render_data(obs)
+
+            except Exception as e:
                 asset_id = (
                     asset_row.get("dir_name")
                     or asset_row.get("model_id")
                     or asset_row.name
                 )
-                print(f"Warning: Low quality render for asset {asset_id}")
+                if attempt == self.config.max_resampling_attempts - 1:
+                    print(
+                        f"Error rendering asset {asset_id} after {attempt + 1} attempts: {e}"
+                    )
+                    raise e
+                else:
+                    print(
+                        f"Error rendering asset {asset_id}, attempt {attempt + 1}, retrying..."
+                    )
+                    # Generate new variation for retry
+                    new_base_variation = np.random.choice(self.base_variations)
+                    current_variation = new_base_variation.copy()
+                    current_variation["lighting"] = self._sample_random_lighting()
+            finally:
+                env.close()
 
-            return env.unwrapped.extract_render_data(obs)
-
-        finally:
-            env.close()
+        # Should not reach here
+        raise RuntimeError("Failed to render asset after all attempts")
 
     def _generate_images_for_class_split(
         self,
@@ -430,8 +490,11 @@ if __name__ == "__main__":
         df = mops_ah.load_annotations().partnet_mobility_df
         df = df.groupby("model_id").first().reset_index()
 
+        blacklist = [12071]
+        df = df[~df["model_id"].isin(blacklist)]
+
         # Create small test subset
-        test_df = df.sample(n=30, random_state=1337).reset_index(drop=True)
+        test_df = df.sample(n=20, random_state=4213).reset_index(drop=True)
 
         config = SingleObjectDatasetConfig(
             output_path="data/test_dataset.h5",
