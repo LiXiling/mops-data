@@ -44,7 +44,6 @@ class SingleObjectDatasetConfig:
     # Generation parameters
     viewpoints: List[Dict] = None
     lighting_types: List[str] = None
-    backgrounds: List[Dict] = None
 
     def __post_init__(self):
         if self.viewpoints is None:
@@ -59,13 +58,6 @@ class SingleObjectDatasetConfig:
 
         if self.lighting_types is None:
             self.lighting_types = ["studio", "natural", "dramatic"]
-
-        if self.backgrounds is None:
-            self.backgrounds = [
-                {"type": "white", "texture": None},
-                {"type": "wood_floor", "texture": "wood_01"},
-                {"type": "concrete_floor", "texture": "concrete_01"},
-            ]
 
 
 class BalancedDatasetPipeline:
@@ -149,12 +141,12 @@ class BalancedDatasetPipeline:
     def _generate_base_variations(self) -> List[Dict]:
         """Generate base variation combinations"""
         combinations = list(
-            itertools.product(self.config.viewpoints, self.config.backgrounds)
+            itertools.product(self.config.viewpoints, self.config.lighting_types)
         )
 
         variations = []
-        for viewpoint, background in combinations:
-            variation = {"viewpoint": viewpoint, "background": background}
+        for viewpoint, lighting in combinations:
+            variation = {"viewpoint": viewpoint, "lighting": lighting}
             variations.append(variation)
 
         return variations
@@ -231,8 +223,6 @@ class BalancedDatasetPipeline:
             "lighting_type": variation["lighting"]["type"],
             "lighting_intensity": variation["lighting"]["intensity"],
             "light_temperature": variation["lighting"]["temperature"],
-            "background_type": variation["background"]["type"],
-            "background_texture": variation["background"]["texture"],
         }
 
         # Set asset identifier
@@ -494,14 +484,14 @@ if __name__ == "__main__":
         df = df[~df["model_id"].isin(blacklist)]
 
         # Create small test subset
-        test_df = df.sample(n=20, random_state=4213).reset_index(drop=True)
+        test_df = df.sample(n=20, random_state=64).reset_index(drop=True)
 
         config = SingleObjectDatasetConfig(
             output_path="data/test_dataset.h5",
             target_train_images_per_class=10,
             target_test_images_per_class=5,
             min_assets_per_class=2,
-            image_size=(256, 256),  # Smaller for testing
+            image_size=(512, 512),  # Smaller for testing
             light_temp_range=(2700, 7000),  # Warm to daylight
             light_intensity_range=(0.8, 1.3),
         )

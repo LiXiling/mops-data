@@ -160,49 +160,43 @@ class DatasetRenderEnv(BaseEnv):
         return np.array([red, green, blue]) / 255.0
 
     def _load_lighting(self, options):
-        """Override lighting setup with temperature control"""
+        """Simple enhanced lighting with two light sources"""
         # Get RGB color from temperature
         light_color = (
             self._kelvin_to_rgb(self.light_temperature) * self.lighting_intensity
         )
 
+        # Slightly higher ambient light to avoid pure black shadows
+        self.scene.ambient_light = [0.05, 0.05, 0.05]
+
+        # Main light (your existing logic, just enhanced)
         if self.lighting_type == "studio":
-            # Studio setup with directional light and warm ambient
+            # Main key light
             self.scene.add_directional_light(
-                [0.5, -1, -0.5], light_color.tolist(), shadow=True
+                [0.5, -1, -0.5], (light_color * 0.8).tolist(), shadow=True
             )
-            ambient_color = (
-                self._kelvin_to_rgb(self.light_temperature + 1000)
-                * self.lighting_intensity
-                * 0.2
+            # Simple fill light from opposite side
+            self.scene.add_directional_light(
+                [-0.3, -0.5, -0.3], (light_color * 0.3).tolist()
             )
-            self.scene.ambient_light = ambient_color.tolist()
 
         elif self.lighting_type == "natural":
-            # Natural lighting (sun)
+            # Main sun light
             self.scene.add_directional_light(
-                [0.3, -1, -0.7], light_color.tolist(), shadow=True
+                [0.3, -1, -0.7], (light_color * 0.9).tolist(), shadow=True
             )
-            # Sky-like ambient (cooler)
-            ambient_color = (
-                self._kelvin_to_rgb(self.light_temperature + 2000)
-                * self.lighting_intensity
-                * 0.3
-            )
-            self.scene.ambient_light = ambient_color.tolist()
+            # Sky fill light
+            self.scene.add_directional_light([0, 0, -1], (light_color * 0.4).tolist())
 
         elif self.lighting_type == "dramatic":
-            # Strong single light source
+            # Strong side light
             self.scene.add_directional_light(
-                [1, -1, -0.2], light_color.tolist(), shadow=True
+                [1, -1, -0.2], (light_color * 1.0).tolist(), shadow=True
             )
-            # Minimal warm ambient
-            ambient_color = (
-                self._kelvin_to_rgb(self.light_temperature - 500)
-                * self.lighting_intensity
-                * 0.1
+            # Subtle fill light
+            self.scene.add_directional_light(
+                [-0.5, -0.5, -0.5], (light_color * 0.2).tolist()
             )
-            self.scene.ambient_light = ambient_color.tolist()
 
     def _get_obs_with_sensor_data(self, info, apply_texture_transforms=True):
         """Get observations with affordance augmentation"""
