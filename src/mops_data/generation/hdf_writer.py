@@ -1,9 +1,9 @@
+import datetime
 import json
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import h5py
 import numpy as np
-import pandas as pd
 
 
 class HDF5Writer:
@@ -21,80 +21,73 @@ class HDF5Writer:
         self.file_path = file_path
         self.class_names = class_names
         self.class_to_idx = {name: idx for idx, name in enumerate(class_names)}
-
         self.images_written = 0
-        self.current_image_id = 0
 
         # Open the HDF5 file and create structure
         self.h5_file = h5py.File(file_path, "w")
-        self._create_dataset_structure(max_images_estimate)
 
-    def _create_dataset_structure(self, max_images_estimate: int):
-        """
-        Create the HDF5 file structure
-
-        Args:
-            max_images_estimate: Rough estimate of total images for preallocation
-        """
         # Create main groups
         self.images_group = self.h5_file.create_group("images")
         self.masks_group = self.h5_file.create_group("masks")
         self.labels_group = self.h5_file.create_group("labels")
         self.metadata_group = self.h5_file.create_group("metadata")
 
-        # Create subgroups for different mask types
-        self.semantic_masks_group = self.masks_group.create_group("semantic")
-        self.instance_masks_group = self.masks_group.create_group("instance")
-        self.part_masks_group = self.masks_group.create_group("parts")
-        self.affordance_masks_group = self.masks_group.create_group("affordance")
-        self.depth_group = self.masks_group.create_group("depth")
-        self.normal_group = self.masks_group.create_group("normal")
+        # Create subgroups for different mask types using a helper
+        self.optional_groups = {
+            "semantic": self.masks_group.create_group("semantic"),
+            "instance": self.masks_group.create_group("instance"),
+            "parts": self.masks_group.create_group("parts"),
+            "affordance": self.masks_group.create_group("affordance"),
+            "depth": self.masks_group.create_group("depth"),
+            "normal": self.masks_group.create_group("normal"),
+        }
 
-        # Pre-allocate classification labels array
-        self.class_labels = self.labels_group.create_dataset(
-            "class_labels",
-            shape=(max_images_estimate,),
-            maxshape=(None,),
-            dtype=np.int32,
-            chunks=True,
-        )
+        # Pre-allocate resizable datasets
+        self.preallocated_datasets = {
+            "class_labels": self.labels_group.create_dataset(
+                "class_labels",
+                shape=(max_images_estimate,),
+                maxshape=(None,),
+                dtype=np.int32,
+                chunks=True,
+            ),
+            "splits": self.labels_group.create_dataset(
+                "splits",
+                shape=(max_images_estimate,),
+                maxshape=(None,),
+                dtype=np.bool_,
+                chunks=True,
+            ),
+            "image_info": self.metadata_group.create_dataset(
+                "image_info",
+                shape=(max_images_estimate,),
+                maxshape=(None,),
+                dtype=h5py.special_dtype(vlen=str),
+                chunks=True,
+            ),
+        }
 
         # Store class names
         self.labels_group.create_dataset(
             "class_names", data=[name.encode("utf-8") for name in self.class_names]
         )
 
-        # Pre-allocate metadata arrays
-        self.image_metadata = self.metadata_group.create_dataset(
-            "image_info",
-            shape=(max_images_estimate,),
-            maxshape=(None,),
-            dtype=h5py.special_dtype(vlen=str),
-            chunks=True,
-        )
+    def _add_optional_dataset(
+        self, group: h5py.Group, name: str, data: np.ndarray, **kwargs
+    ):
+        """Helper to create a dataset with gzip compression."""
+        group.create_dataset(name, data=data, compression="gzip", **kwargs)
 
-    def add_image(
-        self,
-        image: np.ndarray,
-        semantic_mask: np.ndarray,
-        class_name: str,
-        asset_id: str,
-        render_params: Dict,
-        part_mask: Optional[np.ndarray] = None,
-        instance_mask: Optional[np.ndarray] = None,
-        affordance_mask: Optional[np.ndarray] = None,
-        depth: Optional[np.ndarray] = None,
-        normal: Optional[np.ndarray] = None,
-    ) -> str:
+    def add_image(self, **kwargs: Any) -> str:
         """
-        Add a single image and its annotations to the dataset
+        Add a single image and its annotations to the dataset.
 
-        Args:
+        Args (passed as keyword arguments):
             image: RGB image array (H, W, 3)
             semantic_mask: Semantic segmentation mask (H, W)
             class_name: Name of the object class
             asset_id: ID of the 3D asset used
-            render_params: Dictionary with rendering parameters
+            render_params: Dictionary with rendering parameters (must contain 'split')
             part_mask: Optional part segmentation mask (H, W)
             instance_mask: Optional instance segmentation mask (H, W)
             affordance_mask: Optional affordance segmentation mask (H, W)
@@ -104,95 +97,60 @@ class HDF5Writer:
         Returns:
             image_id: String ID assigned to this image
         """
-        # Generate image ID
-        image_id = f"image_{self.current_image_id:06d}"
+        image_idx = self.images_written
+        image_id = f"image_{image_idx:06d}"
 
         # Store image
-        self.images_group.create_dataset(
-            image_id, data=image, compression="gzip", compression_opts=6, chunks=True
-        )
-
-        # Store semantic mask
-        self.semantic_masks_group.create_dataset(
+        self._add_optional_dataset(
+            self.images_group,
             image_id,
-            data=semantic_mask,
-            compression="gzip",
-            compression_opts=9,  # Higher compression for masks
+            kwargs["image"],
+            compression_opts=6,
             chunks=True,
         )
 
-        # Store optional masks and data
-        if part_mask is not None:
-            self.part_masks_group.create_dataset(
-                image_id,
-                data=part_mask,
-                compression="gzip",
-                compression_opts=9,
-                chunks=True,
-            )
-
-        if instance_mask is not None:
-            self.instance_masks_group.create_dataset(
-                image_id,
-                data=instance_mask,
-                compression="gzip",
-                compression_opts=9,
-                chunks=True,
-            )
-
-        if affordance_mask is not None:
-            self.affordance_masks_group.create_dataset(
-                image_id,
-                data=affordance_mask,
-                compression="gzip",
-                compression_opts=9,
-                chunks=True,
-            )
-
-        if depth is not None:
-            self.depth_group.create_dataset(
-                image_id,
-                data=depth,
-                compression="gzip",
-                compression_opts=7,
-                chunks=True,
-            )
-
-        if normal is not None:
-            self.normal_group.create_dataset(
-                image_id,
-                data=normal,
-                compression="gzip",
-                compression_opts=7,
-                chunks=True,
-            )
-
-        # Store class label
-        class_idx = self.class_to_idx[class_name]
-        self.class_labels[self.current_image_id] = class_idx
-
-        # Store metadata
-        metadata = {
-            "image_id": image_id,
-            "class_name": class_name,
-            "class_idx": class_idx,
-            "asset_id": asset_id,
-            "render_params": render_params,
-            "image_shape": image.shape,
-            "mask_shape": semantic_mask.shape,
-            "has_part_mask": part_mask is not None,
-            "has_instance_mask": instance_mask is not None,
-            "has_affordance_mask": affordance_mask is not None,
-            "has_depth": depth is not None,
-            "has_normal": normal is not None,
+        # Store masks and other optional data
+        optional_data_map = {
+            "semantic": ("semantic_mask", 9),
+            "instance": ("instance_mask", 9),
+            "parts": ("part_mask", 9),
+            "affordance": ("affordance_mask", 9),
+            "depth": ("depth", 7),
+            "normal": ("normal", 7),
         }
 
-        self.image_metadata[self.current_image_id] = json.dumps(metadata)
+        metadata = {
+            "image_id": image_id,
+            "class_name": kwargs["class_name"],
+            "class_idx": self.class_to_idx[kwargs["class_name"]],
+            "asset_id": kwargs["asset_id"],
+            "render_params": kwargs["render_params"],
+            "image_shape": kwargs["image"].shape,
+        }
 
-        # Update counters
-        self.current_image_id += 1
+        for group_name, (kwarg_key, comp_level) in optional_data_map.items():
+            data = kwargs.get(kwarg_key)
+            metadata[f"has_{kwarg_key}"] = data is not None
+            if data is not None:
+                if "mask" in kwarg_key:
+                    metadata["mask_shape"] = data.shape
+                self._add_optional_dataset(
+                    self.optional_groups[group_name],
+                    image_id,
+                    data,
+                    compression_opts=comp_level,
+                    chunks=True,
+                )
+
+        # Store labels and metadata
+        self.preallocated_datasets["class_labels"][image_idx] = metadata["class_idx"]
+        self.preallocated_datasets["splits"][image_idx] = (
+            kwargs["render_params"]["split"] == "train"
+        )
+        self.preallocated_datasets["image_info"][image_idx] = json.dumps(metadata)
+
+        # Update counter
         self.images_written += 1
-
         if self.images_written % 100 == 0:
             print(f"Written {self.images_written} images...")
 
@@ -203,35 +161,43 @@ class HDF5Writer:
         Finalize the dataset by trimming arrays and adding final metadata
         """
         # Trim pre-allocated arrays to actual size
-        self.class_labels.resize((self.current_image_id,))
-        self.image_metadata.resize((self.current_image_id,))
+        for ds in self.preallocated_datasets.values():
+            ds.resize((self.images_written,))
 
         # Add dataset-level metadata
         dataset_info = {
-            "total_images": self.current_image_id,
+            "total_images": self.images_written,
             "num_classes": len(self.class_names),
-            "creation_date": pd.Timestamp.now().isoformat(),
+            "creation_date": datetime.datetime.now().isoformat(),
             "version": "1.0",
         }
-
         self.metadata_group.attrs.update(dataset_info)
 
-        # Add class statistics
-        class_counts = {}
-        for i in range(len(self.class_names)):
-            count = np.sum(self.class_labels[: self.current_image_id] == i)
-            class_counts[self.class_names[i]] = int(count)
-
+        # Calculate and store class statistics
+        class_labels_arr = self.preallocated_datasets["class_labels"][:]
+        unique_indices, counts = np.unique(class_labels_arr, return_counts=True)
+        class_counts = {
+            self.class_names[i]: int(c) for i, c in zip(unique_indices, counts)
+        }
         self.metadata_group.create_dataset(
             "class_counts", data=json.dumps(class_counts).encode("utf-8")
         )
 
-        print(f"Finalized dataset with {self.current_image_id} images")
+        # Calculate and store split statistics
+        splits_array = self.preallocated_datasets["splits"][:]
+        train_count = int(np.sum(splits_array))
+        split_counts = {"train": train_count, "test": len(splits_array) - train_count}
+        self.metadata_group.create_dataset(
+            "split_counts", data=json.dumps(split_counts).encode("utf-8")
+        )
+
+        print(f"Finalized dataset with {self.images_written} images")
         print(f"Class distribution: {class_counts}")
+        print(f"Split distribution: {split_counts}")
 
     def close(self):
         """Close the HDF5 file."""
-        if self.h5_file is not None:
+        if self.h5_file:
             self.h5_file.close()
             self.h5_file = None
 
@@ -242,7 +208,6 @@ class HDF5Writer:
         self.finalize()
         self.close()
 
-    # Properties for access to internal state
     @property
     def total_images_written(self) -> int:
         """Get the total number of images written so far"""
