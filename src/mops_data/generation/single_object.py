@@ -1,4 +1,5 @@
 import itertools
+import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -91,20 +92,16 @@ class BalancedDatasetPipeline:
     def __init__(self, config: SingleObjectDatasetConfig, partnet_mob_df: pd.DataFrame):
         self.config = config
         self.assets_df = partnet_mob_df
-
         np.random.seed(self.config.random_seed)
 
-        # Filter and plan dataset
         self.filtered_df = self._filter_classes()
         self.balanced_plan = self._create_balanced_plan()
         self.base_variations = self._generate_base_variations()
-
         self._print_dataset_plan()
 
     def _filter_classes(self) -> pd.DataFrame:
-        """Filter classes to those with enough assets"""
+        """Filter classes to those with enough assets."""
         df = self.assets_df.copy()
-
         if "model_cat" not in df.columns:
             raise ValueError("DataFrame must have 'model_cat' column")
 
@@ -117,129 +114,66 @@ class BalancedDatasetPipeline:
         ].index
         df = df[df["model_cat"].isin(valid_classes)].reset_index(drop=True)
 
-        print(f"Filtered to {len(df)} assets across {len(valid_classes)} classes")
+        print(f"Filtered to {len(df)} assets across {len(valid_classes)} classes.")
         return df
 
     def _create_balanced_plan(self) -> Dict[str, Dict]:
-        """Create balanced generation plan for each class"""
+        """Create a balanced generation plan for each class."""
         plan = {}
-
         for class_name in self.filtered_df["model_cat"].unique():
             class_assets = self.filtered_df[self.filtered_df["model_cat"] == class_name]
-            total_assets = len(class_assets)
-
-            n_test_assets = max(1, int(total_assets * self.config.test_asset_ratio))
-            n_train_assets = total_assets - n_test_assets
+            n_test = max(1, int(len(class_assets) * self.config.test_asset_ratio))
 
             train_assets, test_assets = train_test_split(
-                class_assets,
-                test_size=n_test_assets,
-                random_state=self.config.random_seed,
+                class_assets, test_size=n_test, random_state=self.config.random_seed
             )
-
-            # Calculate images per asset
-            train_images_per_asset = max(
-                1, self.config.target_train_images_per_class // n_train_assets
-            )
-            test_images_per_asset = max(
-                1, self.config.target_test_images_per_class // n_test_assets
-            )
-
-            train_remainder = self.config.target_train_images_per_class % n_train_assets
-            test_remainder = self.config.target_test_images_per_class % n_test_assets
 
             plan[class_name] = {
-                "train_assets": train_assets,
-                "test_assets": test_assets,
-                "train_images_per_asset": train_images_per_asset,
-                "test_images_per_asset": test_images_per_asset,
-                "train_remainder": train_remainder,
-                "test_remainder": test_remainder,
-                "total_train_images": self.config.target_train_images_per_class,
-                "total_test_images": self.config.target_test_images_per_class,
-                "n_train_assets": n_train_assets,
-                "n_test_assets": n_test_assets,
+                "train_assets": train_assets.to_dict("records"),
+                "test_assets": test_assets.to_dict("records"),
+                "target_train": self.config.target_train_images_per_class,
+                "target_test": self.config.target_test_images_per_class,
             }
-
         return plan
 
     def _generate_base_variations(self) -> List[Dict]:
-        """Generate base variation combinations"""
-        combinations = list(
-            itertools.product(self.config.viewpoints, self.config.lighting_types)
-        )
+        """Generate base variation combinations from viewpoints and lighting types."""
+        return [
+            {"viewpoint": vp, "lighting": lt}
+            for vp, lt in itertools.product(
+                self.config.viewpoints, self.config.lighting_types
+            )
+        ]
+
+    def _sample_variations_for_asset(self, n_images: int) -> List[Dict]:
+        """Sample n variations for a single asset with random lighting."""
+        num_base = len(self.base_variations)
+        indices = np.random.choice(num_base, size=n_images, replace=n_images > num_base)
 
         variations = []
-        for viewpoint, lighting in combinations:
-            variation = {"viewpoint": viewpoint, "lighting": lighting}
-            variations.append(variation)
+        for i in indices:
+            var = self.base_variations[i].copy()
+            var["viewpoint"] = var["viewpoint"].copy()
+            # Add small random perturbations to each sampled viewpoint
+            var["viewpoint"]["azimuth"] += np.random.uniform(-10, 10)
+            var["viewpoint"]["elevation"] += np.random.uniform(-5, 5)
+            var["lighting"] = self._sample_random_lighting()
+            variations.append(var)
 
         return variations
 
-    def _sample_variations_for_asset(self, n_images: int) -> List[Dict]:
-        """Sample n variations for a single asset with random lighting"""
-        if n_images <= len(self.base_variations):
-            indices = np.random.choice(
-                len(self.base_variations), size=n_images, replace=False
-            )
-            selected_variations = [self.base_variations[i] for i in indices]
-        else:
-            # Need more variations than base combinations
-            base_cycles = n_images // len(self.base_variations)
-            remainder = n_images % len(self.base_variations)
-
-            selected_variations = []
-
-            # Add full cycles with small perturbations
-            for cycle in range(base_cycles):
-                for base_var in self.base_variations:
-                    var = base_var.copy()
-                    if cycle > 0:
-                        # Add small perturbations for repeated variations
-                        var["viewpoint"] = var["viewpoint"].copy()
-                        var["viewpoint"]["azimuth"] += np.random.uniform(-10, 10)
-                        var["viewpoint"]["elevation"] += np.random.uniform(-3, 3)
-                    selected_variations.append(var)
-
-            # Add remainder variations
-            if remainder > 0:
-                indices = np.random.choice(
-                    len(self.base_variations), size=remainder, replace=False
-                )
-                for i in indices:
-                    var = self.base_variations[i].copy()
-                    var["viewpoint"] = var["viewpoint"].copy()
-                    var["viewpoint"]["azimuth"] += np.random.uniform(-15, 15)
-                    selected_variations.append(var)
-
-        # Add random lighting to each variation
-        for var in selected_variations:
-            var["lighting"] = self._sample_random_lighting()
-
-        return selected_variations
-
     def _sample_random_lighting(self) -> Dict:
-        """Sample random lighting parameters"""
-        lighting_type = np.random.choice(self.config.lighting_types)
-
-        # Sample temperature and intensity from ranges
-        temp_min, temp_max = self.config.light_temp_range
-        intensity_min, intensity_max = self.config.light_intensity_range
-
-        temperature = np.random.uniform(temp_min, temp_max)
-        intensity = np.random.uniform(intensity_min, intensity_max)
-
+        """Sample random lighting parameters."""
         return {
-            "type": lighting_type,
-            "temperature": temperature,
-            "intensity": intensity,
+            "type": np.random.choice(self.config.lighting_types),
+            "temperature": np.random.uniform(*self.config.light_temp_range),
+            "intensity": np.random.uniform(*self.config.light_intensity_range),
         }
 
-    def _create_render_env(self, asset_row: pd.Series, variation: Dict):
-        """Create render environment for asset with variation"""
+    def _create_render_env(self, asset_info: Dict, variation: Dict):
+        """Create a render environment for a given asset and variation."""
         env_kwargs = {
             "render_mode": "rgb_array",
-            "num_envs": 1,
             "obs_mode": self.config.obs_mode,
             "image_size": self.config.image_size,
             "camera_distance": self.config.camera_distance,
@@ -249,281 +183,248 @@ class BalancedDatasetPipeline:
             "lighting_intensity": variation["lighting"]["intensity"],
             "light_temperature": variation["lighting"]["temperature"],
             "sensor_configs": dict(shader_pack="rt"),
+            "model_cat": asset_info.get("model_cat"),
+            "asset_id": (
+                str(asset_info.get("model_id")) if "model_id" in asset_info else None
+            ),
+            "dir_name": asset_info.get("dir_name"),
         }
+        return gym.make(
+            "DatasetRenderEnv-v1",
+            **{k: v for k, v in env_kwargs.items() if v is not None},
+        )
 
-        # Set asset identifier
-        if "dir_name" in asset_row and pd.notna(asset_row["dir_name"]):
-            env_kwargs["dir_name"] = asset_row["dir_name"]
-        elif "model_id" in asset_row and pd.notna(asset_row["model_id"]):
-            env_kwargs["asset_id"] = str(asset_row["model_id"])
-        else:
-            env_kwargs["asset_index"] = asset_row.name
-
-        if "model_cat" in asset_row and pd.notna(asset_row["model_cat"]):
-            env_kwargs["model_cat"] = asset_row["model_cat"]
-
-        return gym.make("DatasetRenderEnv-v1", **env_kwargs)
-
-    def _render_asset(
-        self, asset_row: pd.Series, variation: Dict
-    ) -> Dict[str, np.ndarray]:
-        """Render a single asset with validation and resampling for low quality"""
+    def _render_with_retry(
+        self, asset_info: Dict, variation: Dict
+    ) -> Optional[Dict[str, np.ndarray]]:
+        """Render an asset, retrying with new variations on failure or low quality."""
+        asset_id_str = str(
+            asset_info.get("model_id") or asset_info.get("dir_name", "N/A")
+        )
         current_variation = variation.copy()
 
         for attempt in range(self.config.max_resampling_attempts):
-            env = self._create_render_env(asset_row, current_variation)
-
+            env = self._create_render_env(asset_info, current_variation)
             try:
-                obs, info = env.reset(seed=0)
-
+                obs, _ = env.reset(seed=self.config.random_seed + attempt)
                 # Step environment a few times for stability
-                action = (
-                    np.zeros_like(env.action_space.sample())
-                    if hasattr(env.action_space, "sample")
-                    else None
-                )
                 for _ in range(3):
-                    obs, reward, terminated, truncated, info = env.step(action)
-                    if terminated or truncated:
+                    obs, _, terminated, _, _ = env.step(None)
+                    if terminated:
                         break
 
-                # Validate render quality
                 if env.unwrapped.is_valid_render(
-                    obs, min_segments=self.config.min_segments_threshold
+                    obs, self.config.min_segments_threshold
                 ):
                     return env.unwrapped.extract_render_data(obs)
-                else:
-                    # Low quality render - try again with new variation
-                    if attempt < self.config.max_resampling_attempts - 1:
-                        asset_id = (
-                            asset_row.get("dir_name")
-                            or asset_row.get("model_id")
-                            or asset_row.name
-                        )
-                        print(
-                            f"Low quality render for asset {asset_id}, attempt {attempt + 1}, resampling..."
-                        )
 
-                        # Generate new variation with different viewpoint and lighting
-                        new_base_variation = np.random.choice(self.base_variations)
-                        current_variation = new_base_variation.copy()
-                        current_variation["lighting"] = self._sample_random_lighting()
-
-                        # Add some randomization to viewpoint
-                        current_variation["viewpoint"] = current_variation[
-                            "viewpoint"
-                        ].copy()
-                        current_variation["viewpoint"]["azimuth"] += np.random.uniform(
-                            -30, 30
-                        )
-                        current_variation["viewpoint"][
-                            "elevation"
-                        ] += np.random.uniform(-10, 10)
-                        current_variation["viewpoint"]["elevation"] = np.clip(
-                            current_variation["viewpoint"]["elevation"], 5, 60
-                        )
-                    else:
-                        # Final attempt failed, use what we have
-                        asset_id = (
-                            asset_row.get("dir_name")
-                            or asset_row.get("model_id")
-                            or asset_row.name
-                        )
-                        print(
-                            f"Warning: Using low quality render for asset {asset_id} after {attempt + 1} attempts"
-                        )
-                        return env.unwrapped.extract_render_data(obs)
+                print(
+                    f"Warning: Low quality render for {asset_id_str} (attempt {attempt+1}). Resampling variation."
+                )
+                # Resample a new variation for the next attempt
+                current_variation = self._sample_variations_for_asset(1)[0]
 
             except Exception as e:
-                asset_id = (
-                    asset_row.get("dir_name")
-                    or asset_row.get("model_id")
-                    or asset_row.name
+                print(
+                    f"Error rendering {asset_id_str} (attempt {attempt+1}): {e}. Retrying..."
                 )
-                if attempt == self.config.max_resampling_attempts - 1:
-                    print(
-                        f"Error rendering asset {asset_id} after {attempt + 1} attempts: {e}"
-                    )
-                    raise e
-                else:
-                    print(
-                        f"Error rendering asset {asset_id}, attempt {attempt + 1}, retrying..."
-                    )
-                    # Generate new variation for retry
-                    new_base_variation = np.random.choice(self.base_variations)
-                    current_variation = new_base_variation.copy()
-                    current_variation["lighting"] = self._sample_random_lighting()
+                current_variation = self._sample_variations_for_asset(1)[0]
             finally:
+                obs = env.unwrapped.extract_render_data(obs)
                 env.close()
 
-        # Should not reach here
-        raise RuntimeError("Failed to render asset after all attempts")
+        print(
+            f"Error: Failed to get a valid render for {asset_id_str} after {self.config.max_resampling_attempts} attempts."
+        )
+        return obs
 
     def _generate_images_for_class_split(
         self,
         writer: HDF5Writer,
-        assets_df: pd.DataFrame,
-        plan: Dict,
+        assets: List[Dict],
+        target_count: int,
         split: str,
         class_name: str,
     ):
-        """Generate images for a specific class and split"""
-        images_per_asset = plan[f"{split}_images_per_asset"]
-        remainder = plan[f"{split}_remainder"]
+        """Generate and save images for a specific class and split."""
+        if not assets:
+            print(f"    No assets available for {class_name} {split} split. Skipping.")
+            return
 
-        # Randomly assign extra images to assets
-        assets_with_extra = set()
-        if remainder > 0:
-            extra_indices = np.random.choice(
-                len(assets_df), size=remainder, replace=False
+        pbar = tqdm(
+            total=target_count, desc=f"  {split.capitalize():<5} images", unit="img"
+        )
+
+        # Use itertools.cycle to loop through assets until target count is met
+        asset_cycler = itertools.cycle(enumerate(assets))
+        generated_count = 0
+
+        while generated_count < target_count:
+            asset_idx, asset_info = next(asset_cycler)
+            variation = self._sample_variations_for_asset(1)[0]
+
+            render_data = self._render_with_retry(asset_info, variation)
+            if render_data is None:
+                continue
+
+            render_params = {
+                "split": split,
+                "variation": variation,
+                "image_size": self.config.image_size,
+            }
+            asset_id = str(asset_info.get("model_id", f"asset_{asset_idx}"))
+
+            writer.add_image(
+                class_name=class_name,
+                asset_id=asset_id,
+                render_params=render_params,
+                **render_data,
             )
-            assets_with_extra = set(extra_indices)
+            generated_count += 1
+            pbar.update(1)
 
-        total_images_generated = 0
-        target_total = plan[f"total_{split}_images"]
-
-        for asset_idx, (_, asset_row) in tqdm(
-            enumerate(assets_df.iterrows()), desc=f"{split} assets"
-        ):
-            n_images = images_per_asset
-            if asset_idx in assets_with_extra:
-                n_images += 1
-
-            if total_images_generated + n_images > target_total:
-                n_images = target_total - total_images_generated
-                if n_images <= 0:
-                    break
-
-            variations = self._sample_variations_for_asset(n_images)
-
-            for variation in variations:
-                if total_images_generated >= target_total:
-                    break
-
-                render_data = self._render_asset(asset_row, variation)
-
-                render_params = {
-                    "split": split,
-                    "variation": variation,
-                    "image_size": self.config.image_size,
-                    "dataset_name": self.config.dataset_name,
-                }
-
-                asset_id = str(
-                    asset_row.get(
-                        "model_id", asset_row.get("dir_name", f"asset_{asset_idx}")
-                    )
-                )
-
-                writer.add_image(
-                    image=render_data["image"],
-                    semantic_mask=render_data["semantic_mask"],
-                    class_name=class_name,
-                    asset_id=asset_id,
-                    render_params=render_params,
-                    part_mask=render_data.get("part_mask"),
-                    instance_mask=render_data.get("instance_mask"),
-                    affordance_mask=render_data.get("affordance_mask"),
-                    depth=render_data.get("depth"),
-                    normal=render_data.get("normal"),
-                )
-
-                total_images_generated += 1
-
-        print(f"    Generated {total_images_generated} {split} images for {class_name}")
+        pbar.close()
 
     def _print_dataset_plan(self):
-        """Print dataset creation plan"""
+        """Print the dataset creation plan."""
         print("\n=== BALANCED DATASET PLAN ===")
         print(
             f"Target: {self.config.target_train_images_per_class} train + {self.config.target_test_images_per_class} test images per class"
         )
         print(f"Classes: {len(self.balanced_plan)}")
-        print(f"Lighting: Random selection from {self.config.lighting_types}")
-        print(
-            f"Temperature range: {self.config.light_temp_range[0]:.0f}K - {self.config.light_temp_range[1]:.0f}K"
-        )
-
         total_train = (
             len(self.balanced_plan) * self.config.target_train_images_per_class
         )
         total_test = len(self.balanced_plan) * self.config.target_test_images_per_class
         print(
-            f"Total images: {total_train + total_test} ({total_train} train, {total_test} test)"
+            f"Estimated Total: {total_train + total_test} ({total_train} train, {total_test} test)"
         )
+        print("-" * 30)
 
     def create_dataset(self):
-        """Create the balanced dataset"""
+        """Create the balanced dataset by rendering assets and writing to HDF5."""
         total_images = sum(
-            plan["total_train_images"] + plan["total_test_images"]
+            plan["target_train"] + plan["target_test"]
             for plan in self.balanced_plan.values()
         )
-
-        print(f"\n=== CREATING DATASET ===")
-        print(f"Output: {self.config.output_path}")
+        print(f"\n=== CREATING DATASET: {self.config.output_path} ===")
         print(f"Estimated total images: {total_images}")
 
         try:
-            estimated_images = max(total_images, int(total_images * 1.2))
-
             with HDF5Writer(
                 self.config.output_path,
                 list(self.balanced_plan.keys()),
-                estimated_images,
+                int(total_images * 1.1),  # Pre-allocate with 10% buffer
             ) as writer:
-
-                for class_name in tqdm(self.balanced_plan.keys(), desc="Classes"):
-                    plan = self.balanced_plan[class_name]
-
+                for class_name, plan in tqdm(
+                    self.balanced_plan.items(), desc="Total Progress", unit="class"
+                ):
                     print(f"\nProcessing class: {class_name}")
 
-                    print(f"  Generating {plan['total_train_images']} train images...")
+                    # Generate training images
                     self._generate_images_for_class_split(
-                        writer, plan["train_assets"], plan, "train", class_name
+                        writer,
+                        plan["train_assets"],
+                        plan["target_train"],
+                        "train",
+                        class_name,
                     )
-
-                    print(f"  Generating {plan['total_test_images']} test images...")
+                    # Generate testing images
                     self._generate_images_for_class_split(
-                        writer, plan["test_assets"], plan, "test", class_name
+                        writer,
+                        plan["test_assets"],
+                        plan["target_test"],
+                        "test",
+                        class_name,
                     )
 
         except Exception as e:
-            print(f"Error during dataset creation: {e}")
+            print(f"\nFATAL ERROR during dataset creation: {e}")
             raise
 
-        print(f"\n=== DATASET COMPLETE ===")
-        print(f"File: {self.config.output_path}")
+        print(f"\n=== DATASET CREATION COMPLETE ===")
+        print(f"File saved to: {self.config.output_path}")
 
 
 if __name__ == "__main__":
     # Example usage
-    print("Please provide a PartNet Mobility DataFrame to create_dataset()")
-    print("Expected columns: 'model_cat', 'model_id' (and optionally 'dir_name')")
+    print("--- Single Object Dataset Generation Script ---")
+    start_time = time.time()
+    print(
+        f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))}"
+    )
 
     try:
+        # This block attempts to load data for a real run.
+        # It requires the 'mops_data' package to be installed and configured.
         import mops_data.asset_manager.anno_handler as mops_ah
 
         df = mops_ah.load_annotations().partnet_mobility_df
         df = df.groupby("model_id").first().reset_index()
 
-        blacklist = [12071]
+        # Blacklist of assets that are known to cause issues
+        blacklist = [
+            10356,
+            10546,
+            11260,
+            11538,
+            11887,
+            12071,
+            12115,
+            12542,
+            12578,
+            12584,
+            12612,
+            23724,
+            25144,
+            2780,
+            29525,
+            30857,
+            32213,
+            32746,
+            3380,
+            3593,
+            39138,
+            43142,
+            7130,
+            7138,
+            7221,
+            7306,
+            7320,
+            7347,
+            8966,
+            9918,
+            9987,
+        ]
         df = df[~df["model_id"].isin(blacklist)]
 
-        # Create small test subset
-        test_df = df.sample(n=20, random_state=64).reset_index(drop=True)
+        # For a quick test, uncomment the following line:
+        # df = df.groupby('model_cat').head(10).reset_index(drop=True)
 
         config = SingleObjectDatasetConfig(
-            output_path="data/test_dataset.h5",
-            target_train_images_per_class=10,
-            target_test_images_per_class=5,
-            min_assets_per_class=2,
-            image_size=(512, 512),  # Smaller for testing
-            light_temp_range=(2700, 7000),  # Warm to daylight
-            light_intensity_range=(0.8, 1.3),
+            output_path="data/mops_single_dataset_big_v2.h5",
+            target_train_images_per_class=40,
+            target_test_images_per_class=20,
+            min_assets_per_class=10,
+            image_size=(512, 512),
+            light_temp_range=(2000, 10000),
+            light_intensity_range=(0.6, 1.5),
         )
 
-        pipeline = BalancedDatasetPipeline(config, test_df)
+        pipeline = BalancedDatasetPipeline(config, df)
         pipeline.create_dataset()
 
     except ImportError:
-        print("mops_data.asset_manager.anno_handler not available for testing")
+        print("\nCould not import 'mops_data'.")
+        print("This script requires the MOPS data handling library for full execution.")
+        print("Please ensure it is installed and configured correctly.")
+    except Exception as e:
+        print(f"\nAn unexpected error occurred: {e}")
+
+    finally:
+        end_time = time.time()
+        print(
+            f"End time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))}"
+        )
+        elapsed = end_time - start_time
+        print(f"Total elapsed time: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
