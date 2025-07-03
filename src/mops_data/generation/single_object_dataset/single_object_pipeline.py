@@ -1,48 +1,23 @@
 import itertools
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import gymnasium as gym
 import numpy as np
 import pandas as pd
-from single_obj_config import SingleObjectDatasetConfig
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
+from mops_data.generation.base_pipeline import BaseDatasetPipeline
 from mops_data.generation.hdf_writer import HDF5Writer
+from mops_data.generation.single_object_dataset.single_obj_config import (
+    SingleObjectDatasetConfig,
+)
 
 
-class BalancedDatasetPipeline:
+class BalancedSingleObjectDatasetPipeline(BaseDatasetPipeline):
     """Pipeline for generating balanced single object dataset."""
 
-    def __init__(self, config: SingleObjectDatasetConfig, partnet_mob_df: pd.DataFrame):
-        self.config = config
-        self.assets_df = partnet_mob_df
-        np.random.seed(self.config.random_seed)
-
-        self.filtered_df = self._filter_classes()
-        self.balanced_plan = self._create_balanced_plan()
-        self.base_variations = self._generate_base_variations()
-        self._print_dataset_plan()
-
-    def _filter_classes(self) -> pd.DataFrame:
-        """Filter classes to those with enough assets."""
-        df = self.assets_df.copy()
-        if "model_cat" not in df.columns:
-            raise ValueError("DataFrame must have 'model_cat' column")
-
-        if self.config.classes_to_include:
-            df = df[df["model_cat"].isin(self.config.classes_to_include)]
-
-        class_counts = df["model_cat"].value_counts()
-        valid_classes = class_counts[
-            class_counts >= self.config.min_assets_per_class
-        ].index
-        df = df[df["model_cat"].isin(valid_classes)].reset_index(drop=True)
-
-        print(f"Filtered to {len(df)} assets across {len(valid_classes)} classes.")
-        return df
-
-    def _create_balanced_plan(self) -> Dict[str, Dict]:
+    def _create_plan(self) -> Dict[str, Dict]:
         """Create a balanced generation plan for each class."""
         plan = {}
         for class_name in self.filtered_df["model_cat"].unique():
@@ -56,19 +31,10 @@ class BalancedDatasetPipeline:
             plan[class_name] = {
                 "train_assets": train_assets.to_dict("records"),
                 "test_assets": test_assets.to_dict("records"),
-                "target_train": self.config.target_train_images_per_class,
-                "target_test": self.config.target_test_images_per_class,
+                "target_train": self.config.target_train_images_per_set,
+                "target_test": self.config.target_test_images_per_set,
             }
         return plan
-
-    def _generate_base_variations(self) -> List[Dict]:
-        """Generate base variation combinations from viewpoints and lighting types."""
-        return [
-            {"viewpoint": vp, "lighting": lt}
-            for vp, lt in itertools.product(
-                self.config.viewpoints, self.config.lighting_types
-            )
-        ]
 
     def _sample_variations_for_asset(self, n_images: int) -> List[Dict]:
         """Sample n variations for a single asset with random lighting."""
@@ -205,27 +171,10 @@ class BalancedDatasetPipeline:
 
         pbar.close()
 
-    def _print_dataset_plan(self):
-        """Print the dataset creation plan."""
-        print("\n=== BALANCED DATASET PLAN ===")
-        print(
-            f"Target: {self.config.target_train_images_per_class} train + {self.config.target_test_images_per_class} test images per class"
-        )
-        print(f"Classes: {len(self.balanced_plan)}")
-        total_train = (
-            len(self.balanced_plan) * self.config.target_train_images_per_class
-        )
-        total_test = len(self.balanced_plan) * self.config.target_test_images_per_class
-        print(
-            f"Estimated Total: {total_train + total_test} ({total_train} train, {total_test} test)"
-        )
-        print("-" * 30)
-
     def create_dataset(self):
         """Create the balanced dataset by rendering assets and writing to HDF5."""
         total_images = sum(
-            plan["target_train"] + plan["target_test"]
-            for plan in self.balanced_plan.values()
+            plan["target_train"] + plan["target_test"] for plan in self.plan.values()
         )
         print(f"\n=== CREATING DATASET: {self.config.output_path} ===")
         print(f"Estimated total images: {total_images}")
@@ -233,11 +182,11 @@ class BalancedDatasetPipeline:
         try:
             with HDF5Writer(
                 self.config.output_path,
-                list(self.balanced_plan.keys()),
+                list(self.plan.keys()),
                 int(total_images * 1.1),  # Pre-allocate with 10% buffer
             ) as writer:
                 for class_name, plan in tqdm(
-                    self.balanced_plan.items(), desc="Total Progress", unit="class"
+                    self.plan.items(), desc="Total Progress", unit="class"
                 ):
                     print(f"\nProcessing class: {class_name}")
 

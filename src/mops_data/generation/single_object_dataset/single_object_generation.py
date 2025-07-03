@@ -1,9 +1,13 @@
 import time
 
-from single_obj_config import ASSET_BLACKLIST, SingleObjectDatasetConfig
-from single_object_pipeline import BalancedDatasetPipeline
-
 import mops_data.asset_manager.anno_handler as mops_ah
+from mops_data.generation.base_config import ASSET_BLACKLIST
+from mops_data.generation.single_object_dataset.single_obj_config import (
+    SingleObjectDatasetConfig,
+)
+from mops_data.generation.single_object_dataset.single_object_pipeline import (
+    BalancedSingleObjectDatasetPipeline,
+)
 
 
 def generate(dataset_config: SingleObjectDatasetConfig):
@@ -22,7 +26,7 @@ def generate(dataset_config: SingleObjectDatasetConfig):
 
     config = dataset_config
 
-    pipeline = BalancedDatasetPipeline(config, df)
+    pipeline = BalancedSingleObjectDatasetPipeline(config, df)
     pipeline.create_dataset()
 
     end_time = time.time()
@@ -34,8 +38,8 @@ def generate(dataset_config: SingleObjectDatasetConfig):
 if __name__ == "__main__":
     FULL_DATASET_CONFIG = SingleObjectDatasetConfig(
         output_path="data/mops_data/mops_single_dataset_big_v2.h5",
-        target_train_images_per_class=40,
-        target_test_images_per_class=20,
+        target_train_images_per_set=40,
+        target_test_images_per_set=20,
         min_assets_per_class=10,
         image_size=(512, 512),
         light_temp_range=(2000, 10000),
@@ -44,8 +48,8 @@ if __name__ == "__main__":
 
     DEBUG_DATASET_CONFIG = SingleObjectDatasetConfig(
         output_path="data/mops_data/debug_mops.h5",
-        target_train_images_per_class=5,
-        target_test_images_per_class=5,
+        target_train_images_per_set=5,
+        target_test_images_per_set=5,
         min_assets_per_class=100,
         image_size=(128, 128),
         light_temp_range=(2000, 10000),
