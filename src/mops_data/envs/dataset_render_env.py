@@ -29,10 +29,7 @@ class DatasetRenderEnv(BaseEnv):
         self,
         *args,
         # Asset specification
-        asset_index: Optional[int] = None,
-        asset_id: Optional[str] = None,
-        dir_name: Optional[str] = None,
-        model_cat: Optional[str] = None,
+        mob_id: Optional[str] = None,
         # Rendering configuration
         image_size: Tuple[int, int] = (512, 512),
         camera_distance: float = 1.5,
@@ -51,10 +48,7 @@ class DatasetRenderEnv(BaseEnv):
         **kwargs
     ):
         # Store parameters
-        self.asset_index = asset_index
-        self.asset_id = asset_id
-        self.dir_name = dir_name
-        self.model_cat = model_cat
+        self.mob_id = mob_id
         self.image_size = image_size
         self.camera_distance = camera_distance
         self.camera_elevation = camera_elevation
@@ -82,36 +76,17 @@ class DatasetRenderEnv(BaseEnv):
             registry=self.object_annotation_registry
         )
 
-        self.loaded_object = None
-
         super().__init__(*args, robot_uids="none", **kwargs)
 
     def _load_scene(self, options):
         """Load scene with the specified object"""
         # Load object using available identifier
-        if self.dir_name is not None:
-            self.loaded_object = self.partnet_mobility_loader.load(
-                self.dir_name,
-                self.object_position,
-                no_grav=True,
-                scale=self.object_scale,
-            )
-        elif self.asset_id is not None:
-            self.loaded_object = self.partnet_mobility_loader.load(
-                self.asset_id,
-                self.object_position,
-                no_grav=True,
-                scale=self.object_scale,
-            )
-        elif self.asset_index is not None:
-            self.loaded_object = self.partnet_mobility_loader.load_by_index(
-                self.asset_index,
-                self.object_position,
-                no_grav=True,
-                scale=self.object_scale,
-            )
-        else:
-            raise ValueError("Must specify one of: asset_id, dir_name, or asset_index")
+        self.partnet_mobility_loader.load(
+            self.mob_id,
+            self.object_position,
+            no_grav=True,
+            scale=self.object_scale,
+        )
 
         self.object_annotation_registry.register_missing_objects(self)
 

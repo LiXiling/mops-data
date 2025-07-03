@@ -1,89 +1,14 @@
 import itertools
-import time
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
 import pandas as pd
+from single_obj_config import SingleObjectDatasetConfig
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from mops_data.generation.hdf_writer import HDF5Writer
-
-
-def generate_simple_front_biased_viewpoints(
-    n_viewpoints: int, random_seed: int = None
-) -> List[Dict]:
-    """
-    Very simple version: just sample randomly within front-biased ranges.
-
-    Args:
-        n_viewpoints: Number of viewpoints to generate
-        random_seed: Optional seed for reproducibility
-
-    Returns:
-        List of viewpoint dictionaries
-    """
-    if random_seed is not None:
-        np.random.seed(random_seed)
-
-    viewpoints = []
-
-    for _ in range(n_viewpoints):
-        # Elevation: 10-40 degrees (avoid top-down and ground level)
-        elevation = np.random.uniform(-30, 30)
-
-        # Azimuth: front 120-degree arc centered on 0
-        # This gives us -60 to +60 degrees as you suggested
-        azimuth = np.random.uniform(-60, 60)
-
-        viewpoints.append({"elevation": elevation, "azimuth": azimuth})
-
-    return viewpoints
-
-
-@dataclass
-class SingleObjectDatasetConfig:
-    """Configuration for single object dataset generation."""
-
-    output_path: str
-    dataset_name: str = "mops_single_object"
-
-    # Dataset distribution
-    target_train_images_per_class: int = 30
-    target_test_images_per_class: int = 15
-    test_asset_ratio: float = 0.3
-    random_seed: int = 42
-
-    # Asset requirements
-    min_assets_per_class: int = 8
-    classes_to_include: Optional[List[str]] = None
-
-    # Rendering parameters
-    image_size: Tuple[int, int] = (512, 512)
-    camera_distance: float = 1.5
-    obs_mode: str = "rgb+depth+segmentation+normal"
-
-    # Validation
-    min_segments_threshold: int = 3
-    max_resampling_attempts: int = 3  # Max attempts to get valid render
-
-    # Lighting variation ranges
-    light_temp_range: Tuple[float, float] = (2700, 8000)  # Warm to cool daylight
-    light_intensity_range: Tuple[float, float] = (0.8, 1.2)
-
-    # Generation parameters
-    viewpoints: List[Dict] = None
-    lighting_types: List[str] = None
-
-    def __post_init__(self):
-        if self.viewpoints is None:
-            # Diverse viewpoints for good coverage
-            self.viewpoints = generate_simple_front_biased_viewpoints(n_viewpoints=48)
-
-        if self.lighting_types is None:
-            self.lighting_types = ["studio", "natural", "dramatic"]
 
 
 class BalancedDatasetPipeline:
@@ -183,11 +108,7 @@ class BalancedDatasetPipeline:
             "lighting_intensity": variation["lighting"]["intensity"],
             "light_temperature": variation["lighting"]["temperature"],
             "sensor_configs": dict(shader_pack="rt"),
-            "model_cat": asset_info.get("model_cat"),
-            "asset_id": (
-                str(asset_info.get("model_id")) if "model_id" in asset_info else None
-            ),
-            "dir_name": asset_info.get("dir_name"),
+            "mob_id": asset_info.get("dir_name"),
         }
         return gym.make(
             "DatasetRenderEnv-v1",
@@ -343,90 +264,3 @@ class BalancedDatasetPipeline:
 
         print(f"\n=== DATASET CREATION COMPLETE ===")
         print(f"File saved to: {self.config.output_path}")
-
-
-if __name__ == "__main__":
-    # Example usage
-    print("--- Single Object Dataset Generation Script ---")
-    start_time = time.time()
-    print(
-        f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))}"
-    )
-
-    try:
-        # This block attempts to load data for a real run.
-        # It requires the 'mops_data' package to be installed and configured.
-        import mops_data.asset_manager.anno_handler as mops_ah
-
-        df = mops_ah.load_annotations().partnet_mobility_df
-        df = df.groupby("model_id").first().reset_index()
-
-        # Blacklist of assets that are known to cause issues
-        blacklist = [
-            10356,
-            10546,
-            11260,
-            11538,
-            11887,
-            12071,
-            12115,
-            12542,
-            12578,
-            12584,
-            12612,
-            23724,
-            25144,
-            2780,
-            29525,
-            30857,
-            32213,
-            32746,
-            3380,
-            3593,
-            39138,
-            43142,
-            7130,
-            7138,
-            7221,
-            7306,
-            7320,
-            7347,
-            8966,
-            9918,
-            9987,
-            40069,
-            41434,
-        ]
-        df = df[~df["model_id"].isin(blacklist)]
-        df = df[~df["dir_name"].isin(blacklist)]
-
-        # For a quick test, uncomment the following line:
-        # df = df.groupby('model_cat').head(10).reset_index(drop=True)
-
-        config = SingleObjectDatasetConfig(
-            output_path="data/mops_single_dataset_big_v2.h5",
-            target_train_images_per_class=40,
-            target_test_images_per_class=20,
-            min_assets_per_class=10,
-            image_size=(512, 512),
-            light_temp_range=(2000, 10000),
-            light_intensity_range=(0.6, 1.5),
-        )
-
-        pipeline = BalancedDatasetPipeline(config, df)
-        pipeline.create_dataset()
-
-    except ImportError:
-        print("\nCould not import 'mops_data'.")
-        print("This script requires the MOPS data handling library for full execution.")
-        print("Please ensure it is installed and configured correctly.")
-    except Exception as e:
-        print(f"\nAn unexpected error occurred: {e}")
-
-    finally:
-        end_time = time.time()
-        print(
-            f"End time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))}"
-        )
-        elapsed = end_time - start_time
-        print(f"Total elapsed time: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
