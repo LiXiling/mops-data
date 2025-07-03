@@ -202,7 +202,6 @@ class BalancedDatasetPipeline:
             asset_info.get("model_id") or asset_info.get("dir_name", "N/A")
         )
         current_variation = variation.copy()
-
         for attempt in range(self.config.max_resampling_attempts):
             env = self._create_render_env(asset_info, current_variation)
             try:
@@ -395,8 +394,11 @@ if __name__ == "__main__":
             8966,
             9918,
             9987,
+            40069,
+            41434,
         ]
         df = df[~df["model_id"].isin(blacklist)]
+        df = df[~df["dir_name"].isin(blacklist)]
 
         # For a quick test, uncomment the following line:
         # df = df.groupby('model_cat').head(10).reset_index(drop=True)
