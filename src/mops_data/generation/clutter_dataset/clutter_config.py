@@ -43,8 +43,8 @@ class ClutterDatasetConfig(BaseDatasetConfig):
     dataset_name: str = "mops_clutter"
 
     # Dataset distribution
-    target_train_images_per_set: int = 60
-    target_test_images_per_set: int = 20
+    target_train_images_per_set: int = 6000
+    target_test_images_per_set: int = 2000
 
     def get_viewpoints(self, n_viewpoints: int) -> List[Dict]:
         return generate_clutter_viewpoints(

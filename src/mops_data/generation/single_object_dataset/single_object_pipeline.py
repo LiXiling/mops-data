@@ -52,7 +52,7 @@ class BalancedSingleObjectDatasetPipeline(BaseDatasetPipeline):
             "mob_id": asset_info.get("dir_name"),
         }
         return gym.make(
-            "DatasetRenderEnv-v1",
+            "SingleObjectRenderEnv-v1",
             **{k: v for k, v in env_kwargs.items() if v is not None},
         )
 

@@ -1,0 +1,75 @@
+from typing import Any, Dict, Optional, Tuple
+
+import numpy as np
+import pandas as pd
+import sapien
+import torch
+from mani_skill.envs.sapien_env import BaseEnv
+from mani_skill.sensors.camera import CameraConfig
+from mani_skill.utils import sapien_utils
+from mani_skill.utils.registration import register_env
+
+from mops_data.asset_manager.object_annotation_registry import ObjectAnnotationRegistry
+from mops_data.asset_manager.partnet_mobility_loader import PartNetMobilityLoader
+from mops_data.render.afford_obs_augmentor import AffordObsAugmentor
+from mops_data.render.shader_config import RT_RGB_ONLY_CONFIG
+
+from .single_object_env import DatasetRenderEnv
+
+
+@register_env("ClutterRenderEnv-v1", max_episode_steps=1)
+class ClutterEnv(DatasetRenderEnv):
+    """
+    Simplified rendering environment for dataset generation.
+
+    Loads PartNet Mobility objects and renders them with configurable
+    camera, lighting, and background settings.
+    """
+
+    SUPPORTED_ROBOTS = ["none"]
+
+    def __init__(
+        self,
+        *args,
+        # Asset specification
+        asset_df: pd.DataFrame = None,
+        **kwargs
+    ):
+        self.asset_df = asset_df
+        super().__init__(*args, **kwargs)
+
+    def _load_objects(self, options: Dict[str, Any]):
+        """Load scene with the specified object"""
+
+        # random number 8 - 15
+        n_assets = np.random.randint(8, 16)
+
+        for i in range(n_assets):
+            # Randomly select an asset from the DataFrame
+            asset = self.asset_df.sample(1).iloc[0]
+            mob_id = asset["dir_name"]
+            object_position = np.random.uniform(-0.5, 0.5, size=3)
+            object_position[2] = 0.1 * (i + 1)
+
+            # Load the selected asset
+            self.partnet_mobility_loader.load(
+                mob_id,
+                object_position,
+            )
+
+    def is_valid_render(self, obs: Dict, min_segments: int = 3) -> bool:
+        """
+        Check if render is valid based on part segmentation complexity.
+
+        Args:
+            obs: Observation dictionary
+            min_segments: Minimum number of unique segmentation values required
+
+        Returns:
+            True if render has sufficient segmentation detail
+        """
+        camera_obs = obs["sensor_data"]["base_camera"]
+        part_mask = camera_obs["instance_segmentation"].cpu()[0]
+        unique_values = np.unique(part_mask)
+
+        return len(unique_values) >= min_segments

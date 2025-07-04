@@ -1,3 +1,4 @@
+import abc
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -6,16 +7,13 @@ import torch
 from mani_skill.envs.sapien_env import BaseEnv
 from mani_skill.sensors.camera import CameraConfig
 from mani_skill.utils import sapien_utils
-from mani_skill.utils.registration import register_env
 
 from mops_data.asset_manager.object_annotation_registry import ObjectAnnotationRegistry
 from mops_data.asset_manager.partnet_mobility_loader import PartNetMobilityLoader
 from mops_data.render.afford_obs_augmentor import AffordObsAugmentor
-from mops_data.render.shader_config import RT_RGB_ONLY_CONFIG
 
 
-@register_env("DatasetRenderEnv-v1", max_episode_steps=1)
-class DatasetRenderEnv(BaseEnv):
+class DatasetRenderEnv(BaseEnv, abc.ABC):
     """
     Simplified rendering environment for dataset generation.
 
@@ -28,8 +26,6 @@ class DatasetRenderEnv(BaseEnv):
     def __init__(
         self,
         *args,
-        # Asset specification
-        mob_id: Optional[str] = None,
         # Rendering configuration
         image_size: Tuple[int, int] = (512, 512),
         camera_distance: float = 1.5,
@@ -39,16 +35,9 @@ class DatasetRenderEnv(BaseEnv):
         lighting_type: str = "studio",
         lighting_intensity: float = 1.0,
         light_temperature: float = 5500.0,  # Kelvin (daylight ~5500K)
-        # Background configuration
-        background_type: str = "white",
-        background_texture: Optional[str] = None,
-        # Object configuration
-        object_scale: float = 0.8,
-        object_position: Optional[np.ndarray] = None,
         **kwargs
     ):
         # Store parameters
-        self.mob_id = mob_id
         self.image_size = image_size
         self.camera_distance = camera_distance
         self.camera_elevation = camera_elevation
@@ -56,14 +45,6 @@ class DatasetRenderEnv(BaseEnv):
         self.lighting_type = lighting_type
         self.lighting_intensity = lighting_intensity
         self.light_temperature = light_temperature
-        self.background_type = background_type
-        self.background_texture = background_texture
-        self.object_scale = object_scale
-        self.object_position = (
-            object_position
-            if object_position is not None
-            else np.array([0.0, 0.0, 0.0])
-        )
 
         # Initialize asset management
         self.object_annotation_registry = ObjectAnnotationRegistry()
@@ -78,16 +59,16 @@ class DatasetRenderEnv(BaseEnv):
 
         super().__init__(*args, robot_uids="none", **kwargs)
 
-    def _load_scene(self, options):
-        """Load scene with the specified object"""
-        # Load object using available identifier
-        self.partnet_mobility_loader.load(
-            self.mob_id,
-            self.object_position,
-            no_grav=True,
-            scale=self.object_scale,
-        )
+    @abc.abstractmethod
+    def _load_objects(self, options: Dict[str, Any]):
+        """
+        Load objects into the scene based on provided options.
+        This method should be implemented by subclasses to handle specific object loading logic.
+        """
+        pass
 
+    def _load_scene(self, options):
+        self._load_objects(options)
         self.object_annotation_registry.register_missing_objects(self)
 
     def _kelvin_to_rgb(self, temperature: float) -> np.ndarray:
@@ -181,50 +162,36 @@ class DatasetRenderEnv(BaseEnv):
     def extract_render_data(self, obs: Dict) -> Dict[str, np.ndarray]:
         """
         Extract render data from observations for HDF5Writer.
-
-        Returns:
-            Dictionary with keys: 'image', 'semantic_mask', 'part_mask',
-            'instance_mask', 'affordance_mask', 'depth', 'normal'
         """
-        result = {}
         camera_obs = obs["sensor_data"]["base_camera"]
+        key_map = {
+            "rgb": "image",
+            "depth": "depth",
+            "normal": "normal",
+            "segmentation": "part_mask",
+            "class_segmentation": "semantic_mask",
+            "instance_segmentation": "instance_mask",
+            "affordance_segmentation": "affordance_mask",
+        }
+        return {
+            target_key: camera_obs[source_key].cpu()[0]
+            for source_key, target_key in key_map.items()
+            if source_key in camera_obs
+        }
 
-        # Extract data, removing batch dimension [0]
-        if "rgb" in camera_obs:
-            result["image"] = camera_obs["rgb"].cpu()[0]
-        if "depth" in camera_obs:
-            result["depth"] = camera_obs["depth"].cpu()[0]
-        if "normal" in camera_obs:
-            result["normal"] = camera_obs["normal"].cpu()[0]
-        if "segmentation" in camera_obs:
-            result["part_mask"] = camera_obs["segmentation"].cpu()[0]
-        if "class_segmentation" in camera_obs:
-            result["semantic_mask"] = camera_obs["class_segmentation"].cpu()[0]
-        if "instance_segmentation" in camera_obs:
-            result["instance_mask"] = camera_obs["instance_segmentation"].cpu()[0]
-        if "affordance_segmentation" in camera_obs:
-            result["affordance_mask"] = camera_obs["affordance_segmentation"].cpu()[0]
-
-        return result
-
+    @abc.abstractmethod
     def is_valid_render(self, obs: Dict, min_segments: int = 3) -> bool:
         """
         Check if render is valid based on part segmentation complexity.
 
         Args:
-            obs: Observation dictionary
+            obs: Raw Observation dictionary, unextracted
             min_segments: Minimum number of unique segmentation values required
 
         Returns:
             True if render has sufficient segmentation detail
         """
-        camera_obs = obs["sensor_data"]["base_camera"]
-        if "segmentation" not in camera_obs:
-            return True  # No segmentation to validate
-
-        part_mask = camera_obs["segmentation"].cpu()[0]
-        unique_values = np.unique(part_mask)
-        return len(unique_values) >= min_segments
+        pass
 
     @property
     def _default_sensor_configs(self):
@@ -237,8 +204,8 @@ class DatasetRenderEnv(BaseEnv):
         y = self.camera_distance * np.cos(elevation_rad) * np.sin(azimuth_rad)
         z = self.camera_distance * np.sin(elevation_rad)
 
-        camera_pos = self.object_position + np.array([x, y, z])
-        pose = sapien_utils.look_at(eye=camera_pos, target=self.object_position)
+        camera_pos = np.array([x, y, z])
+        pose = sapien_utils.look_at(eye=camera_pos, target=np.asarray([0.0, 0.0, 0.0]))
 
         return [
             CameraConfig(
@@ -248,14 +215,6 @@ class DatasetRenderEnv(BaseEnv):
                 height=self.image_size[1],
                 fov=np.pi / 3,
             ),
-            # CameraConfig(
-            #     "base_camera_rt",
-            #     pose=pose,
-            #     width=self.image_size[0],
-            #     height=self.image_size[1],
-            #     fov=np.pi / 3,
-            #     shader_config=RT_RGB_ONLY_CONFIG,
-            # ),
         ]
 
     @property
