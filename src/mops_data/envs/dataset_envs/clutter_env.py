@@ -2,17 +2,10 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import sapien
 import torch
-from mani_skill.envs.sapien_env import BaseEnv
-from mani_skill.sensors.camera import CameraConfig
-from mani_skill.utils import sapien_utils
 from mani_skill.utils.registration import register_env
-
-from mops_data.asset_manager.object_annotation_registry import ObjectAnnotationRegistry
-from mops_data.asset_manager.partnet_mobility_loader import PartNetMobilityLoader
-from mops_data.render.afford_obs_augmentor import AffordObsAugmentor
-from mops_data.render.shader_config import RT_RGB_ONLY_CONFIG
+from mani_skill.utils.scene_builder.kitchen_counter import KitchenCounterSceneBuilder
+from mani_skill.utils.scene_builder.table import TableSceneBuilder
 
 from .single_object_env import DatasetRenderEnv
 
@@ -42,6 +35,9 @@ class ClutterEnv(DatasetRenderEnv):
     def _load_objects(self, options: Dict[str, Any]):
         """Load scene with the specified object"""
 
+        self.premade_scene = TableSceneBuilder(env=self)
+        self.premade_scene.build()
+
         # random number 8 - 15
         n_assets = np.random.randint(8, 16)
 
@@ -51,12 +47,19 @@ class ClutterEnv(DatasetRenderEnv):
             mob_id = asset["dir_name"]
             self.asset_ids.append(str(mob_id))  # String for JSON serialization
             object_position = np.random.uniform(-0.5, 0.5, size=3)
-            object_position[2] = 0.1 * (i + 1)
+            object_position[2] = 0.05 * (i + 1)
+
+            object_euler = np.random.uniform(
+                low=[-np.pi, -np.pi, -np.pi],
+                high=[np.pi, np.pi, np.pi],
+                size=3,
+            )
 
             # Load the selected asset
             self.partnet_mobility_loader.load(
                 mob_id,
                 object_position,
+                euler=object_euler,
             )
 
     def is_valid_render(self, obs: Dict, min_segments: int = 3) -> bool:

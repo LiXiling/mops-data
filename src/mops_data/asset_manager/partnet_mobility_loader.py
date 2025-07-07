@@ -1,8 +1,12 @@
 import json
 import os
 
+import mani_skill
+import mani_skill.utils
 import numpy as np
 import sapien
+import torch
+from mani_skill.utils.geometry import rotation_conversions
 
 from mops_data.asset_manager import anno_handler as mops_ah
 from mops_data.asset_manager.object_annotation_registry import ObjectAnnotationRegistry
@@ -43,17 +47,26 @@ class PartNetMobilityLoader:
         self.segm_id_afford_map = {}
         self.name_counter = 0
 
-    def _load_urdf_builder(self, model_dir, pose, scale=1.0, fix_root=False):
+    def _load_urdf_builder(
+        self, model_dir, pose, euler=None, scale=1.0, fix_root=False
+    ):
         urdf_path = os.path.join(model_dir, "mobility.urdf")
         loader = self.env.scene.create_urdf_loader()
         loader.scale = scale
         loader.fix_root_link = fix_root
 
+        if euler is None:
+            euler = [0, 0, 0]
+
+        quat = rotation_conversions.matrix_to_quaternion(
+            rotation_conversions.euler_angles_to_matrix(torch.Tensor(euler), "XYZ")
+        )
+
         maniskill_articulation_builders = loader.parse(urdf_path)[
             "articulation_builders"
         ]
         builder = maniskill_articulation_builders[0]
-        builder.initial_pose = sapien.Pose(pose)
+        builder.initial_pose = sapien.Pose(pose, quat)
         return builder
 
     def _get_obj_class_name(self, mob_id):
@@ -79,7 +92,7 @@ class PartNetMobilityLoader:
         scale = np.random.uniform(scale_range[0], scale_range[1])
         return scale
 
-    def load(self, mob_id, pose, scale=None, no_grav=False):
+    def load(self, mob_id, pose, euler=None, scale=None, no_grav=False):
         # Load All Auxiliary Information
         model_dir = os.path.join(self.dir_path, f"{mob_id}")
         class_name = self._get_obj_class_name(int(mob_id))
@@ -88,7 +101,7 @@ class PartNetMobilityLoader:
         if scale is None:
             scale = self._get_scale(int(mob_id))
 
-        urdf_builder = self._load_urdf_builder(model_dir, pose, scale, no_grav)
+        urdf_builder = self._load_urdf_builder(model_dir, pose, euler, scale, no_grav)
 
         # Create the Articulation Object
         try:

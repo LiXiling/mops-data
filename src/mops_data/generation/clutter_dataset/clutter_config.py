@@ -26,7 +26,7 @@ def generate_clutter_viewpoints(
 
     for _ in range(n_viewpoints):
         # Elevation in Degrees
-        elevation = np.random.uniform(5, 110)
+        elevation = np.random.uniform(35, 70)
 
         # Azimuth: front 120-degree arc centered on 0
         azimuth = np.random.uniform(-60, 60)
@@ -45,6 +45,8 @@ class ClutterDatasetConfig(BaseDatasetConfig):
     # Dataset distribution
     target_train_images_per_set: int = 6000
     target_test_images_per_set: int = 2000
+
+    camera_distance: float = 1.0
 
     def get_viewpoints(self, n_viewpoints: int) -> List[Dict]:
         return generate_clutter_viewpoints(

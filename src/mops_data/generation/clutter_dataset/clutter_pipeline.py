@@ -71,7 +71,7 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
             try:
                 obs, _ = gym_env.reset(seed=self.config.random_seed + attempt)
                 # Step environment a few times for stability
-                for _ in range(3):
+                for _ in range(15):
                     obs, _, _, _, _ = gym_env.step(None)
 
                 render_env: DatasetRenderEnv = gym_env.unwrapped
