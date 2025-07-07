@@ -159,7 +159,7 @@ class DatasetRenderEnv(BaseEnv, abc.ABC):
         obs = super()._get_obs_with_sensor_data(info, apply_texture_transforms)
         return self.afford_augmentor.augment(self, obs)
 
-    def extract_render_data(self, obs: Dict) -> Dict[str, np.ndarray]:
+    def build_render_data(self, obs: Dict) -> Dict[str, np.ndarray]:
         """
         Extract render data from observations for HDF5Writer.
         """
@@ -168,11 +168,12 @@ class DatasetRenderEnv(BaseEnv, abc.ABC):
             "rgb": "image",
             "depth": "depth",
             "normal": "normal",
-            "segmentation": "part_mask",
-            "class_segmentation": "semantic_mask",
-            "instance_segmentation": "instance_mask",
-            "affordance_segmentation": "affordance_mask",
+            "segmentation": "part",
+            "class_segmentation": "semantic",
+            "instance_segmentation": "instance",
+            "affordance_segmentation": "affordance",
         }
+
         return {
             target_key: camera_obs[source_key].cpu()[0]
             for source_key, target_key in key_map.items()

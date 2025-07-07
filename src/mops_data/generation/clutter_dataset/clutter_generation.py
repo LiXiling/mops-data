@@ -15,6 +15,10 @@ def generate(dataset_config: ClutterDatasetConfig):
     )
 
     df = mops_ah.load_annotations().partnet_mobility_df
+
+    # TableTop Clutter - don't use large objects
+    df = df[~df["is_large_object"]]
+    print(df.shape)
     df = df.groupby("model_id").first().reset_index()
 
     # Blacklist of assets that are known to cause issues
@@ -36,7 +40,7 @@ if __name__ == "__main__":
         output_path="data/mops_data/mops_clutter_dataset_big_v2.h5",
         target_train_images_per_set=6000,
         target_test_images_per_set=2000,
-        min_assets_per_class=10,
+        min_assets_per_class=5,
         image_size=(512, 512),
         light_temp_range=(2000, 10000),
         light_intensity_range=(0.6, 1.5),
@@ -46,7 +50,7 @@ if __name__ == "__main__":
         output_path="data/mops_data/debug_mops.h5",
         target_train_images_per_set=5,
         target_test_images_per_set=5,
-        min_assets_per_class=100,
+        min_assets_per_class=5,
         image_size=(128, 128),
         light_temp_range=(2000, 10000),
         light_intensity_range=(0.6, 1.5),

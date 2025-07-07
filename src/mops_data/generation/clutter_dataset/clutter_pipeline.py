@@ -7,8 +7,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
+from mops_data.envs.dataset_envs.base_rendering_env import DatasetRenderEnv
 from mops_data.generation.base_pipeline import BaseDatasetPipeline
-from mops_data.generation.clutter_dataset.clutter_config import ClutterDatasetConfig
 from mops_data.generation.hdf_writer import HDF5Writer
 
 
@@ -67,32 +67,31 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
         variations = self._sample_variations_for_asset(resampling_attempts)
         for attempt in range(resampling_attempts):
             current_variation = variations[attempt]
-            env = self._create_render_env(asset_df, current_variation)
+            gym_env = self._create_render_env(asset_df, current_variation)
             try:
-                obs, _ = env.reset(seed=self.config.random_seed + attempt)
+                obs, _ = gym_env.reset(seed=self.config.random_seed + attempt)
                 # Step environment a few times for stability
                 for _ in range(3):
-                    obs, _, _, _, _ = env.step(None)
+                    obs, _, _, _, _ = gym_env.step(None)
 
-                if env.unwrapped.is_valid_render(
-                    obs, self.config.min_segments_threshold
-                ):
-                    obs = env.unwrapped.extract_render_data(obs)
-                    env.close()
+                render_env: DatasetRenderEnv = gym_env.unwrapped
+
+                if render_env.is_valid_render(obs, self.config.min_segments_threshold):
+                    obs = render_env.build_render_data(obs)
+                    gym_env.close()
                     return obs, current_variation
 
                 print(
                     f"Warning: Low quality render. (attempt {attempt+1}). Resampling variation."
                 )
             except Exception as e:
-                print(
-                    f"Error rendering {asset_id_str} (attempt {attempt+1}): {e}. Retrying..."
-                )
+                print(f"Error rendering. (attempt {attempt+1}): {e}. Retrying...")
+                raise e
             finally:
-                env.close()
+                gym_env.close()
 
         print(
-            f"Error: Failed to get a valid render for {asset_id_str} after {self.config.max_resampling_attempts} attempts."
+            f"Error: Failed to get a valid render after {self.config.max_resampling_attempts} attempts."
         )
         return None, None
 
@@ -150,7 +149,6 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
         try:
             with HDF5Writer(
                 self.config.output_path,
-                list(self.plan.keys()),
                 int(total_images * 1.1),  # Pre-allocate with 10% buffer
             ) as writer:
                 print("\n=== STARTING TRAIN DATASET CREATION ===")

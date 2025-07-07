@@ -32,6 +32,7 @@ class AnnotationHandler:
         ].unique().tolist()
         self.all_class_names = classes
         self.class_id_map = {classes[i]: i for i in range(len(classes))}
+        self.class_name_map = {i: classes[i] for i in range(len(classes))}
         self.affordance_id_map = None
         self._fill_affordance_info()
 
@@ -54,12 +55,18 @@ class AnnotationHandler:
         if class_name not in self.all_class_names:
             self.all_class_names.append(class_name)
             self.class_id_map[class_name] = len(self.all_class_names) - 1
+            self.class_name_map[len(self.all_class_names) - 1] = class_name
         return len(self.all_class_names) - 1
 
     def get_class_id(self, class_name):
         if class_name in self.class_id_map:
             return self.class_id_map[class_name]
         return self._add_class(class_name)
+
+    def get_class_name(self, class_id):
+        if class_id in self.class_name_map:
+            return self.class_name_map[class_id]
+        raise ValueError(f"Class ID {class_id} not found in class name map.")
 
     def get_affordance_list(self, class_name):
         affords = []
