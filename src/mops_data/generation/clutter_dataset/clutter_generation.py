@@ -37,9 +37,9 @@ def generate(dataset_config: ClutterDatasetConfig):
 
 if __name__ == "__main__":
     FULL_DATASET_CONFIG = ClutterDatasetConfig(
-        output_path="data/mops_data/mops_clutter_dataset_big_v2.h5",
-        target_train_images_per_set=6000,
-        target_test_images_per_set=2000,
+        output_path="data/mops_data/mops_clutter_dataset_v2.h5",
+        target_train_images_per_set=3000,
+        target_test_images_per_set=1000,
         min_assets_per_class=5,
         image_size=(512, 512),
         light_temp_range=(2000, 10000),
@@ -56,4 +56,4 @@ if __name__ == "__main__":
         light_intensity_range=(0.6, 1.5),
     )
 
-    generate(DEBUG_DATASET_CONFIG)
+    generate(FULL_DATASET_CONFIG)

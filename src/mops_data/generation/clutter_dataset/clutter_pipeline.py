@@ -78,7 +78,6 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
 
                 if render_env.is_valid_render(obs, self.config.min_segments_threshold):
                     obs = render_env.build_render_data(obs)
-                    gym_env.close()
                     return obs, current_variation
 
                 print(
@@ -111,7 +110,7 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
         generated_count = 0
 
         while generated_count < target_count:
-            random_set = assets.sample(20)
+            random_set = assets.sample(40)
 
             # If Render is invalid, try the next asset
             render_data, variation = self._render_with_retry(random_set)
