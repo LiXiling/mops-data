@@ -41,6 +41,48 @@ class KitchenEnv(DatasetRenderEnv):
         self.obj_instance_split = obj_instance_split
         super().__init__(*args, **kwargs)
 
+    def _load_lighting(self, options: Dict[str, Any]):
+        """
+        Adds randomized point lights inside the kitchen for better interior lighting.
+        """
+        # Increase ambient light for softer shadows and a brighter base level.
+        self.scene.ambient_light = [0.3, 0.3, 0.3]
+
+        # If no target is selected, we can't place lights effectively.
+        if not hasattr(self, "target_fixture") or self.target_fixture is None:
+            # Fallback to a simple overhead light if no target is defined
+            self.scene.add_point_light([0, 0, 4], [1, 1, 1], shadow=True)
+            return
+
+        # Use a high base intensity suitable for indoor point lights.
+        # random float 0.8 to 3.0
+        base_intensity = np.random.uniform(0.8, 3.0)
+
+        # 1. Create a main light source above the target counter to cast shadows.
+        main_light_pos = self.target_fixture.pos + np.array(
+            [
+                np.random.uniform(-0.5, 0.5),  # Smaller random offset
+                np.random.uniform(-0.5, 0.5),
+                2.0,  # Slightly lower height
+            ]
+        )
+        main_intensity = np.random.uniform(0.9, 1.1)
+        self.scene.add_point_light(
+            main_light_pos,
+            color=np.array([1, 1, 1]) * base_intensity * main_intensity,
+            shadow=True,
+        )
+
+        # 2. Create a softer fill light from near the camera's position.
+        # This ensures the light is always inside the room and illuminates what the camera sees.
+        camera_pose = self._default_sensor_configs[0].pose
+        fill_intensity = np.random.uniform(0.4, 0.6)
+        self.scene.add_point_light(
+            np.array(camera_pose.p[0]),
+            color=np.array([1, 1, 1]) * base_intensity * fill_intensity,
+            shadow=False,
+        )
+
     def _load_objects(self, options: Dict[str, Any]):
         """
         Load a RoboCasa kitchen, pick a single counter, and place objects
