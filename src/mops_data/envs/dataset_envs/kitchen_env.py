@@ -8,6 +8,10 @@ from mani_skill.sensors.camera import CameraConfig
 from mani_skill.utils import sapien_utils
 from mani_skill.utils.registration import register_env
 from mani_skill.utils.scene_builder.robocasa.fixtures.counter import Counter
+from mani_skill.utils.scene_builder.robocasa.objects.kitchen_object_utils import (
+    sample_kitchen_object,
+)
+from mani_skill.utils.scene_builder.robocasa.objects.objects import MJCFObject
 from mani_skill.utils.scene_builder.robocasa.scene_builder import RoboCasaSceneBuilder
 from transforms3d.euler import euler2quat
 from transforms3d.quaternions import quat2mat
@@ -22,68 +26,105 @@ class KitchenEnv(DatasetRenderEnv):
     cluttered scene images from realistic viewpoints.
     """
 
-    def __init__(self, *args, asset_df: pd.DataFrame = None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        asset_df: pd.DataFrame = None,
+        obj_registries=("objaverse",),
+        obj_instance_split=None,
+        **kwargs,
+    ):
         self.asset_df = asset_df
         self.asset_ids = []
         self.target_fixture = None  # The fixture the camera will look at
+        self.obj_registries = obj_registries
+        self.obj_instance_split = obj_instance_split
         super().__init__(*args, **kwargs)
 
     def _load_objects(self, options: Dict[str, Any]):
         """
-        Load a RoboCasa kitchen and place custom objects on its counter surfaces
-        using the builder's helper functions.
+        Load a RoboCasa kitchen, pick a single counter, and place objects
+        only on that counter to create a cluttered scene.
         """
         self.scene_builder = RoboCasaSceneBuilder(self)
         self.scene_builder.build()
 
-        cluttered_counters: List[Counter] = []
-
-        # 1. Iterate through the builder's fixtures to find counters
         fixtures: dict = self.scene_builder.scene_data[0]["fixtures"]
-        for name, fixture in fixtures.items():
-            if "counter" not in name:
-                continue
+        valid_counters = [
+            f
+            for name, f in fixtures.items()
+            if "counter" in name and f.get_reset_regions(env=self, fixtures=fixtures)
+        ]
 
-            # 2. Safely get all valid placement regions for the fixture.
-            # Some "counters" might not have any valid placement areas.
-            reset_regions = fixture.get_reset_regions(env=self, fixtures=fixtures)
-            if not reset_regions:
-                continue  # Skip this fixture if it has no valid regions.
+        if not valid_counters:
+            print("Warning: No valid counters with placement regions found.")
+            return
 
-            # 3. Choose one of the valid regions to place objects in.
-            # We can now be sure that the list of regions is not empty.
-            reset_region = self._episode_rng.choice(list(reset_regions.values()))
-            size = reset_region["size"]
-            offset = reset_region["offset"]
+        self.target_fixture = np.random.choice(valid_counters)
+        reset_regions = self.target_fixture.get_reset_regions(
+            env=self, fixtures=fixtures
+        )
+        reset_region = np.random.choice(list(reset_regions.values()))
+        size = reset_region["size"]
+        offset = reset_region["offset"]
 
-            # Define the placement area based on the region's properties
-            x_range = np.array([-size[0] / 2, size[0] / 2]) + offset[0]
-            y_range = np.array([-size[1] / 2, size[1] / 2]) + offset[1]
-            z_pos = fixture.pos[2] + offset[2]
+        # Place a mix of custom and random RoboCasa objects
+        self._place_custom_assets(size, offset)
+        self._place_robocasa_assets(size, offset)
 
-            # 3. Place a random number of custom assets in this valid region
-            n_assets = self._episode_rng.randint(2, 4)
-            for _ in range(n_assets):
-                asset_info = self.asset_df.sample(1).iloc[0]
-                asset_id = asset_info["dir_name"]
-                self.asset_ids.append(str(asset_id))
+    def _place_robocasa_assets(self, size, offset, num_objects=5):
+        """Place randomly sampled RoboCasa objects on the target fixture."""
+        for i in range(num_objects):
+            # Sample a random graspable object from the RoboCasa dataset
+            obj_kwargs, obj_info = self.sample_object()
+            obj = MJCFObject(self.scene, name=f"distractor_{i}", **obj_kwargs)
 
-                pos = np.array(
-                    [
-                        self._episode_rng.uniform(*x_range),
-                        self._episode_rng.uniform(*y_range),
-                        z_pos,
-                    ]
-                )
-                euler = self._episode_rng.uniform(-np.pi, np.pi, size=3)
-                self.partnet_mobility_loader.load(asset_id, pos, euler=euler)
+            # Correctly calculate the world position for the object
+            world_pos = self._get_world_pos_from_local(size, offset)
+            euler = np.random.uniform(-np.pi, np.pi, size=3)
+            quat = euler2quat(*euler)
+            obj.set_pos(world_pos)
 
-            cluttered_counters.append(fixture)
+    def _place_custom_assets(self, size, offset):
+        """Place assets from the provided DataFrame on the target fixture."""
 
-        # 4. Pick one of the cluttered counters as the camera's focal point
-        if cluttered_counters:
-            self.target_fixture = self._episode_rng.choice(cluttered_counters)
-            print(self.target_fixture)
+        num_objects = np.random.randint(
+            5, 10
+        )  # Randomly choose how many objects to place
+        for _ in range(num_objects):
+            asset_info = self.asset_df.sample(1).iloc[0]
+            asset_id = asset_info["dir_name"]
+            self.asset_ids.append(str(asset_id))
+
+            # Correctly calculate the world position for the object
+            world_pos = self._get_world_pos_from_local(size, offset)
+            euler = np.random.uniform(-np.pi, np.pi, size=3)
+            self.partnet_mobility_loader.load(asset_id, world_pos, euler=euler)
+
+    def _get_world_pos_from_local(self, size, offset):
+        """
+        Samples a point in the fixture's local coordinate frame and transforms
+        it to the world coordinate frame.
+        """
+        # a. Sample a position in the fixture's LOCAL coordinate frame.
+        local_x = np.random.uniform(-size[0] / 2, size[0] / 2) + offset[0]
+        local_y = np.random.uniform(-size[1] / 2, size[1] / 2) + offset[1]
+        local_z = offset[2]
+        local_pos = np.array([local_x, local_y, local_z])
+
+        # b. Transform the local position to the WORLD coordinate frame.
+        fixture_pos = self.target_fixture.pos
+        fixture_quat = self.target_fixture.quat
+        rot_mat = quat2mat(fixture_quat)
+        world_pos = fixture_pos + rot_mat @ local_pos
+        return world_pos
+
+    def sample_object(self, *args, **kwargs):
+        """Helper to sample a random kitchen object from the RoboCasa dataset."""
+        return sample_kitchen_object(
+            groups="all",
+            graspable=True,
+        )
 
     @property
     def _default_sensor_configs(self):
@@ -108,8 +149,8 @@ class KitchenEnv(DatasetRenderEnv):
             camera_pos[2] = 1.6  # Eye-level height
 
             # Add some randomization for more varied shots
-            camera_pos[0] += self._episode_rng.uniform(-0.3, 0.3)
-            camera_pos[1] += self._episode_rng.uniform(-0.3, 0.3)
+            camera_pos[0] += np.random.uniform(-0.3, 0.3)
+            camera_pos[1] += np.random.uniform(-0.3, 0.3)
 
             # Ensure the camera looks at the center of the counter
             up_vector = np.array([0.0, 0.0, 1.0])

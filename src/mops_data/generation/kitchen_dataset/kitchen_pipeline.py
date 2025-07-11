@@ -71,7 +71,7 @@ class KitchenDatasetPipeline(BaseDatasetPipeline):
             try:
                 obs, _ = gym_env.reset(seed=self.config.random_seed + attempt)
                 # Step environment a few times for stability
-                for _ in range(10):
+                for _ in range(20):
                     obs, _, _, _, _ = gym_env.step(None)
 
                 render_env: DatasetRenderEnv = gym_env.unwrapped
