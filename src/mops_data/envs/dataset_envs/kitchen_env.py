@@ -65,6 +65,11 @@ class KitchenEnv(DatasetRenderEnv):
         )
 
     def _load_objects(self, options: Dict[str, Any]):
+        # Preroll batched episode RNG to randomize kitchen env
+        for _ in range(np.random.randint(1, 100)):
+            for i in range(self.num_envs):
+                self._batched_episode_rng[i].randint(0, 120)
+
         """Load a kitchen, pick a counter, and place a mix of objects on it."""
         self.scene_builder = RoboCasaSceneBuilder(self)
         self.scene_builder.build()
