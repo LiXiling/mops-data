@@ -1,7 +1,7 @@
 import gymnasium as gym
 import matplotlib.pyplot as plt
-import numpy as np
 
+import mops_data  # noqa: F401 to register the envs
 
 env = gym.make(
     # "Affordance-v1",  # there are more tasks e.g. "PushCube-v1", "PegInsertionSide-v1", ...
@@ -19,8 +19,8 @@ while True:
     done = False
     step = 0
     while not done:
-        action = np.zeros_like(env.action_space.sample())
-        obs, reward, terminated, truncated, info = env.step(action)
+        # action = np.zeros_like(env.action_space.sample())
+        obs, reward, terminated, truncated, info = env.step(None)
         done = False
 
         if step < 20:

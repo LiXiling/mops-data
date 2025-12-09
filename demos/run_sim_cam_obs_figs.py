@@ -5,22 +5,36 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
+import mops_data  # noqa: F401 to register the envs
+import mops_data.asset_manager.anno_handler as mops_ah
 
 print("CREATE ENV")
 
-env = gym.make(
-    # "Affordance-v1",  # there are more tasks e.g. "PushCube-v1", "PegInsertionSide-v1", ...
-    "AffordanceCasaKitchen-v1",
-    # "RenderEnv-v1",
-    num_envs=1,
-    obs_mode="rgb+depth+segmentation+normal",  # there is also "state_dict", "rgbd", ...
-    # obs_mode="rgbd",
-    # viewer_camera_configs=dict(shader_pack="rt-fast"),
-    sensor_configs=dict(width=1280, height=720, shader_pack="rt"),
-    use_distractors=True,
-    generative_textures="100p",
-    pre_roll=1,
-)
+
+def _create_render_env():
+    """Create a render environment for a given asset and variation."""
+    df = mops_ah.load_annotations().partnet_mobility_df
+
+    env_kwargs = {
+        "render_mode": "rgb_array",
+        "obs_mode": "rgb+depth+segmentation+normal",
+        "image_size": (640, 360),
+        "camera_distance": 0.5,
+        # "camera_elevation": variation["viewpoint"]["elevation"],
+        # "camera_azimuth": variation["viewpoint"]["azimuth"],
+        # "lighting_type": variation["lighting"]["type"],
+        # "lighting_intensity": variation["lighting"]["intensity"],
+        # "light_temperature": variation["lighting"]["temperature"],
+        "sensor_configs": dict(shader_pack="rt"),
+        "asset_df": df,
+    }
+    return gym.make(
+        "KitchenRenderEnv-v1",
+        **{k: v for k, v in env_kwargs.items() if v is not None},
+    )
+
+
+env = _create_render_env()
 
 OUTPUT_DIR = os.path.join(".", "rm_figs")
 
@@ -32,20 +46,15 @@ while True:
     done = False
     step = 0
     while not done:
-        action = np.zeros_like(env.action_space.sample())
-        obs, reward, terminated, truncated, info = env.step(action)
-        done = False
-
-        if step < 5:
-            step += 1
-
-            continue
+        action = None
+        for step in range(10):
+            obs, reward, terminated, truncated, info = env.step(action)
 
         print("MAKE FIGURES")
 
         print(obs["sensor_data"].keys())
 
-        base_cam_obs = obs["sensor_data"]["fetch_head"]
+        base_cam_obs = obs["sensor_data"]["base_camera"]
         print(base_cam_obs.keys())
 
         # Plot the RGB Image
@@ -56,6 +65,8 @@ while True:
 
         # Plot the Depth Image
         depth = base_cam_obs["depth"].cpu()[0]
+        depth = depth.squeeze().numpy()
+        print(depth.shape)
         # save Depth PNG with viridis colormap
         plt.imsave(os.path.join(OUTPUT_DIR, "depth.png"), depth, cmap="viridis")
 
@@ -69,6 +80,7 @@ while True:
                 segm[segm == val] = i
 
             # save Part Segmentation PNG with tab10 colormap
+            segm = segm.numpy().squeeze()
             plt.imsave(os.path.join(OUTPUT_DIR, "segm.png"), segm, cmap="nipy_spectral")
 
             # Plot the Class Segmentation
@@ -78,7 +90,7 @@ while True:
             # replace class_Segm with index of unique values
             for i, val in enumerate(unique_values):
                 class_Segm[class_Segm == val] = i
-
+            class_Segm = class_Segm.numpy().squeeze()
             # save Class Segmentation PNG with viridis colormap
             plt.imsave(
                 os.path.join(OUTPUT_DIR, "class_segm.png"),
@@ -93,7 +105,7 @@ while True:
             # replace aff with index of unique values
             for i, val in enumerate(unique_values):
                 aff[aff == val] = i
-
+            aff = aff.numpy().squeeze()
             # save Affordance Segmentation PNG with viridis colormap
             plt.imsave(os.path.join(OUTPUT_DIR, "aff.png"), aff, cmap="nipy_spectral")
             plt.imsave(os.path.join(OUTPUT_DIR, "aff2.png"), aff, cmap="Set2")

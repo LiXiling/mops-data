@@ -32,7 +32,7 @@ def generate(dataset_config: KitchenDatasetConfig):
     end_time = time.time()
     print(f"End time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))}")
     elapsed = end_time - start_time
-    print(f"Total elapsed time: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
+    print(f"Total elapsed time: {elapsed:.2f} seconds ({elapsed / 60:.2f} minutes)")
 
 
 if __name__ == "__main__":
@@ -47,11 +47,11 @@ if __name__ == "__main__":
     )
 
     DEBUG_DATASET_CONFIG = KitchenDatasetConfig(
-        output_path="data/mops_data/debug_mops.h5",
+        output_path="data/debug_mops.h5",
         target_train_images_per_set=2,
         target_test_images_per_set=2,
         min_assets_per_class=5,
-        image_size=(128, 128),
+        image_size=(640, 360),
         light_temp_range=(2000, 10000),
         light_intensity_range=(0.6, 1.5),
     )

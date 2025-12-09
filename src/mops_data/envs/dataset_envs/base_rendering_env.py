@@ -34,7 +34,7 @@ class DatasetRenderEnv(BaseEnv, abc.ABC):
         lighting_type: str = "studio",
         lighting_intensity: float = 1.0,
         light_temperature: float = 5500.0,  # Kelvin (daylight ~5500K)
-        **kwargs
+        **kwargs,
     ):
         # Store parameters
         self.image_size = image_size
@@ -244,3 +244,7 @@ class DatasetRenderEnv(BaseEnv, abc.ABC):
     def _get_obs_agent(self):
         """No agent observations needed"""
         return torch.zeros(self.num_envs, device=self.device)
+
+    def get_state_dict(self) -> Dict[str, Any]:
+        """Get environment state dict (empty for rendering env)"""
+        return {}
