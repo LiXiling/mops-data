@@ -2,7 +2,6 @@ import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
 
-import mops_data
 
 rng = np.random.default_rng(0)
 env = gym.make(

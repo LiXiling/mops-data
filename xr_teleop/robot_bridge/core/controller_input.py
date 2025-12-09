@@ -3,7 +3,7 @@
 Controller Input Processor - Handles VR controller input for robot control
 """
 import numpy as np
-from config import controller_data, logger, toggle_gripper
+from config import controller_data, logger
 
 
 class ControllerInputProcessor:

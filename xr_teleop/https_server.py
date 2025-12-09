@@ -1,9 +1,7 @@
 import http.server
-import os
 import socketserver
 import ssl
 import subprocess
-import webbrowser
 from pathlib import Path
 
 # Configuration

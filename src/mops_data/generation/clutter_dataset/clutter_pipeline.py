@@ -1,5 +1,4 @@
-import itertools
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
 import gymnasium as gym
 import numpy as np
@@ -172,5 +171,5 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
             print(f"\nFATAL ERROR during dataset creation: {e}")
             raise
 
-        print(f"\n=== DATASET CREATION COMPLETE ===")
+        print("\n=== DATASET CREATION COMPLETE ===")
         print(f"File saved to: {self.config.output_path}")

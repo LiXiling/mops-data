@@ -1,10 +1,6 @@
-from importlib import resources
 
-import numpy as np
-import sapien
 from mani_skill.agents.registration import register_agent
 from mani_skill.agents.robots.panda import PandaWristCam
-from mani_skill.sensors.camera import CameraConfig
 
 
 @register_agent()

@@ -8,12 +8,10 @@ import asyncio
 import logging
 import threading
 
-import mani_skill  # Import to load registered envs
-from config import logger, running
+from config import logger
 from core.robot_controller import RobotController
 from websocket_server import find_certificates, start_server
 
-import mops_data  # Import to load registered envs
 
 
 def run_robot_controller(env_id):

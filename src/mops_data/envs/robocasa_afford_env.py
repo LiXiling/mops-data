@@ -1,4 +1,3 @@
-import os
 
 import numpy as np
 from mani_skill.envs.tasks.mobile_manipulation.robocasa.kitchen import (

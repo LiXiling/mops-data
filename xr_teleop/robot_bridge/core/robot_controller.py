@@ -7,11 +7,8 @@ import time
 from config import (
     controller_data,
     logger,
-    recording_active,
     recording_counter,
-    recording_feedback,
     running,
-    toggle_gripper,
 )
 from core.controller_input import ControllerInputProcessor
 from core.env_mananger import EnvironmentManager

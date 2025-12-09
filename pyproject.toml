@@ -12,7 +12,18 @@ authors = [
 ]
 readme = "README.md"
 
-dependencies = ["pandas"]
+dependencies = [
+    "mani-skill>=3.0.0b22",
+    "pandas",
+    "torch>=2.9.1",
+    "torchaudio>=2.9.1",
+    "torchvision>=0.24.1",
+]
 
 [tool.setuptools.package-data]
 "mops" = ["*.csv", "*.json", "*.urdf"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.8",
+]

@@ -1,12 +1,10 @@
 import os
-import pickle
 
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-import mops_data
 
 SEED = 7331
 DATA_DIR = "data/mops_data/kitchen/hero4"

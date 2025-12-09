@@ -1,4 +1,4 @@
-from typing import Any, Dict, Union
+from typing import Any, Dict
 
 import numpy as np
 import sapien
@@ -7,7 +7,6 @@ from mani_skill.envs.sapien_env import BaseEnv
 from mani_skill.sensors.camera import CameraConfig
 from mani_skill.utils import sapien_utils
 from mani_skill.utils.registration import register_env
-from mani_skill.utils.scene_builder.table import TableSceneBuilder
 
 from mops_data.asset_manager.object_annotation_registry import ObjectAnnotationRegistry
 from mops_data.asset_manager.partnet_mobility_loader import PartNetMobilityLoader

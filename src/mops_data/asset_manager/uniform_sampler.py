@@ -5,7 +5,6 @@ import numpy as np
 from mani_skill.envs.tasks.mobile_manipulation.robocasa.kitchen import (
     RoboCasaKitchenEnv,
 )
-from mani_skill.utils.scene_builder.robocasa.fixtures.mujoco_object import MujocoObject
 from mani_skill.utils.scene_builder.robocasa.utils.object_utils import (
     obj_in_region,
     objs_intersect,

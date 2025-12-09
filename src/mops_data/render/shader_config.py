@@ -1,4 +1,3 @@
-from dataclasses import dataclass, field
 
 import torch
 from mani_skill.render.shaders import ShaderConfig

@@ -1,8 +1,6 @@
 import gymnasium as gym
 import numpy as np
-from mani_skill.envs.sapien_env import BaseEnv
 
-import mops_data
 
 rng = np.random.default_rng(3)
 

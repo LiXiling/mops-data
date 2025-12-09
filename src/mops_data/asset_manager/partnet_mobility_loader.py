@@ -1,8 +1,6 @@
 import json
 import os
 
-import mani_skill
-import mani_skill.utils
 import numpy as np
 import sapien
 import torch

@@ -2,7 +2,7 @@
 """
 Utilities for processing WebXR controller data
 """
-from config import controller_data, logger
+from config import controller_data
 
 
 def process_controller_message(data):

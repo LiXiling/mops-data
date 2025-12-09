@@ -1,18 +1,9 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 import numpy as np
-import sapien
-import torch
-from mani_skill.envs.sapien_env import BaseEnv
-from mani_skill.sensors.camera import CameraConfig
-from mani_skill.utils import sapien_utils
 from mani_skill.utils.registration import register_env
 
-from mops_data.asset_manager.object_annotation_registry import ObjectAnnotationRegistry
-from mops_data.asset_manager.partnet_mobility_loader import PartNetMobilityLoader
 from mops_data.envs.dataset_envs.base_rendering_env import DatasetRenderEnv
-from mops_data.render.afford_obs_augmentor import AffordObsAugmentor
-from mops_data.render.shader_config import RT_RGB_ONLY_CONFIG
 
 
 @register_env("SingleObjectRenderEnv-v1", max_episode_steps=10)

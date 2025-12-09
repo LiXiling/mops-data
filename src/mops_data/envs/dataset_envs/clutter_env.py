@@ -1,10 +1,9 @@
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
 import torch
 from mani_skill.utils.registration import register_env
-from mani_skill.utils.scene_builder.kitchen_counter import KitchenCounterSceneBuilder
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
 
 from .single_object_env import DatasetRenderEnv

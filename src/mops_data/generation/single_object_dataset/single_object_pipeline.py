@@ -3,7 +3,6 @@ from typing import Dict, List, Optional
 
 import gymnasium as gym
 import numpy as np
-import pandas as pd
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
@@ -177,5 +176,5 @@ class BalancedSingleObjectDatasetPipeline(BaseDatasetPipeline):
             print(f"\nFATAL ERROR during dataset creation: {e}")
             raise
 
-        print(f"\n=== DATASET CREATION COMPLETE ===")
+        print("\n=== DATASET CREATION COMPLETE ===")
         print(f"File saved to: {self.config.output_path}")

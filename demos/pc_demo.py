@@ -1,9 +1,6 @@
 import gymnasium as gym
-import matplotlib.pyplot as plt
 import numpy as np
-import torch
 
-import mops_data
 
 env = gym.make(
     # "Affordance-v1",  # there are more tasks e.g. "PushCube-v1", "PegInsertionSide-v1", ...

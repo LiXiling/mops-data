@@ -1,6 +1,4 @@
-import argparse
 import json
-from ast import parse
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -22,7 +20,6 @@ from mani_skill.examples.motionplanning.panda.motionplanner import (
 from mani_skill.utils import sapien_utils
 from mani_skill.utils.wrappers.record import RecordEpisode
 
-import mops_data
 
 
 @dataclass

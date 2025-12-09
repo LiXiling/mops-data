@@ -1,6 +1,6 @@
 import torch
 from mani_skill.envs.sapien_env import BaseEnv
-from mani_skill.utils.structs import Actor, Link
+from mani_skill.utils.structs import Link
 
 from mops_data.asset_manager.object_annotation_registry import ObjectAnnotationRegistry
 
