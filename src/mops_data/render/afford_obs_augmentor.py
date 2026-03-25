@@ -44,6 +44,7 @@ class AffordObsAugmentor:
         # Instance Segmentation: Convert Linked Parts to Root ID
         instance_segm = flat_segm.clone()
         class_segm = flat_segm.clone()
+        is_partnet = torch.zeros_like(camera_segmentations)
         afford_segm = torch.zeros_like(camera_segmentations)
 
         # Extend so that last dimension is max_afford_id
@@ -63,6 +64,10 @@ class AffordObsAugmentor:
                 root_id = obj.articulation.root._objs[0].entity.per_scene_id
                 instance_segm[flat_segm == obj_id] = root_id
 
+            # Binary mask for PartNet objects
+            if self.registry.is_partnet(obj_id):
+                is_partnet[camera_segmentations == obj_id] = 1
+
             class_id = self.registry.get_class_id(obj_id)
             class_segm[flat_segm == obj_id] = class_id
 
@@ -78,6 +83,7 @@ class AffordObsAugmentor:
         res_dict = {}
         res_dict["instance_segmentation"] = instance_segm.reshape(img_shape)
         res_dict["class_segmentation"] = class_segm.reshape(img_shape)
+        res_dict["is_partnet"] = is_partnet.reshape(img_shape)
         res_dict["affordance_segmentation"] = afford_segm
 
         return res_dict

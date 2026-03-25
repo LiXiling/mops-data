@@ -64,6 +64,7 @@ class ObjectAnnotationRegistry:
 
         self.segm_id_to_class_id_map = {}
         self.segm_id_to_affordance_id_map = {}
+        self.partnet_segm_ids = set()
 
     def get_num_affords(self):
         return len(self.affordance_id_map)
@@ -80,6 +81,9 @@ class ObjectAnnotationRegistry:
         for link in partnet_link_obj.get_links():
             # Get Unique ID from ManiSkill simulation
             link_id = link._objs[0].entity.per_scene_id
+
+            # Track as PartNet object
+            self.partnet_segm_ids.add(link_id)
 
             # Fill Class Map
             self.segm_id_to_class_id_map[link_id] = self.anno_handler.get_class_id(
@@ -112,6 +116,9 @@ class ObjectAnnotationRegistry:
             self._register_affordances(
                 obj_id, self.anno_handler.get_affordance_list(class_name)[0]
             )
+
+    def is_partnet(self, obj_id):
+        return obj_id in self.partnet_segm_ids
 
     def get_affordance_list(self, obj_id):
         if obj_id in self.segm_id_to_affordance_id_map:

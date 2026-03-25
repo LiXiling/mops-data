@@ -171,6 +171,7 @@ class DatasetRenderEnv(BaseEnv, abc.ABC):
             "class_segmentation": "semantic",
             "instance_segmentation": "instance",
             "affordance_segmentation": "affordance",
+            "is_partnet": "is_partnet",
         }
 
         return {
