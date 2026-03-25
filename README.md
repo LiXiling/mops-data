@@ -12,47 +12,111 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
-This project builds on `ManiSkill3`, a simulation framework built on `SAPIEN`, which requires **Python 3.10**.
+This project builds on `ManiSkill3`, a simulation framework built on `SAPIEN`, which requires **Python 3.10**.  
+We recommend [uv](https://docs.astral.sh/uv/) for environment and dependency management.
 
 ### Installation
 
 ```bash
-# Create and activate conda environment
-conda create --name mops python=3.10
-conda activate mops
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install ManiSkill3 and dependencies
-pip install mani_skill
-pip install torch torchvision torchaudio
-pip install -e .
+# Create a Python 3.10 virtual environment and install all dependencies
+uv venv --python 3.10
+source .venv/bin/activate
+uv pip install -e .
 ```
 
 ### Asset Setup
 
-1. **Download RoboCasa assets**
+1. **Download RoboCasa assets** (required for kitchen dataset)
    ```bash
    python -m mani_skill.utils.download_asset RoboCasa
    ```
 
-2. **Download PartNet Mobility Assets**  
-   Get the assets from [SAPIEN UCSD](https://sapien.ucsd.edu/browse)
+2. **Download PartNet Mobility assets** (required for all datasets)  
+   Get the assets from [SAPIEN UCSD](https://sapien.ucsd.edu/browse) and place them under `data/partnet_mobility/`.
 
-3. **Organize directory structure**
+3. **Expected directory structure**
    ```
    mops-data/
-   ├── demos/
    ├── data/
-   │   └── partnet_mobility/
+   │   ├── partnet_mobility/   # PartNet-Mobility assets
+   │   └── mops_data/          # generated datasets (output)
+   ├── scripts/                # dataset generation entry points
+   ├── demos/                  # visualisation & exploration scripts
    ├── src/
+   │   └── mops_data/          # core library
    └── ...
    ```
 
-## 🛠️ Development Setup
+## 🗂️ Data Generation
 
-For code development, install and configure pre-commit hooks:
+Three dataset variants are provided. Each has a **debug mode** (small, fast) and a **full mode** (production quality).
+
+### Single-Object Dataset
+
+Isolated PartNet-Mobility objects rendered from multiple viewpoints with varied lighting.
 
 ```bash
-pip install black isort pre-commit
+# Debug run (quick sanity check)
+python scripts/generate_single_object.py --debug
+
+# Full generation
+python scripts/generate_single_object.py
+
+# Custom output path
+python scripts/generate_single_object.py --output data/mops_data/my_single_obj.h5
+```
+
+### Kitchen (Affordance) Dataset
+
+Objects placed inside RoboCasa kitchen environments, rendered from table-level and overhead viewpoints.
+
+```bash
+python scripts/generate_kitchen.py --debug   # debug run
+python scripts/generate_kitchen.py           # full generation
+```
+
+### Tabletop Clutter Dataset
+
+Cluttered tabletop scenes with multiple objects rendered from top-down viewpoints.
+
+```bash
+python scripts/generate_clutter.py --debug   # debug run
+python scripts/generate_clutter.py           # full generation
+```
+
+### Custom Configuration
+
+Each script accepts `--output <path>` to override the output file.  
+For deeper customisation, edit the corresponding config class in `src/mops_data/generation/`:
+
+| Dataset        | Config class                  | Module                                           |
+| -------------- | ----------------------------- | ------------------------------------------------ |
+| Single-object  | `SingleObjectDatasetConfig`   | `mops_data.generation.single_object_dataset`     |
+| Kitchen        | `KitchenDatasetConfig`        | `mops_data.generation.kitchen_dataset`           |
+| Clutter        | `ClutterDatasetConfig`        | `mops_data.generation.clutter_dataset`           |
+
+Key parameters shared by all configs (`BaseDatasetConfig`):
+
+| Parameter                    | Description                                          |
+| ---------------------------- | ---------------------------------------------------- |
+| `output_path`                | Path to the output `.h5` file                        |
+| `image_size`                 | `(width, height)` in pixels                         |
+| `target_train_images_per_set`| Training images per object/scene set                 |
+| `target_test_images_per_set` | Test images per object/scene set                     |
+| `min_assets_per_class`       | Minimum assets required to include a class           |
+| `light_temp_range`           | Kelvin range for light colour temperature variation  |
+| `light_intensity_range`      | Range for light intensity variation                  |
+| `obs_mode`                   | Observation channels (`rgb+depth+segmentation+normal`) |
+
+## 🛠️ Development Setup
+
+For code development, install the dev dependencies and configure pre-commit hooks:
+
+```bash
+uv pip install -e ".[dev]"
 pre-commit install
 pre-commit run
 ```
@@ -63,57 +127,55 @@ This project builds on [ManiSkill3](https://github.com/haosulab/ManiSkill), so m
 
 ### Notable Changes & Extensions
 
-Our CustomEnvs now accept an optional keyword argument `np_rng`, which expects a Numpy Random Number Generator Object.
+- Custom environments accept an optional `np_rng` keyword argument (a NumPy `Generator` object) for reproducible scene sampling.
+- `AffordanceKitchenEnv-v1` supports an optional `preroll` argument to deterministically recreate a specific kitchen setup.
 
-The `AffordanceKitchenEnv-v1` also supports an optional argument `preroll`, which deterministically creates a kitchen setup.
+## 📖 Code Overview
 
-For MOPS-specific functionality, refer to the code documentation in the `src/` directory and example scripts in `demos/`.
-
-## 📖 Usage Guide
-
-| Component                     | Description                                              |
-| ----------------------------- | -------------------------------------------------------- |
-| **`demos/`**                  | Executable high-level scripts for quick image generation |
-| **`src.mops_data`**           | Core source code                                         |
-| **`mops_data.asset_manager`** | Observation augmentation using annotation resources      |
-| **`mops_data.envs`**          | Custom environments for rendering objects and scenes     |
-| **`xr_teleop`**               | WebXR-based VR teleoperation controller                  |
+| Component                       | Description                                               |
+| ------------------------------- | --------------------------------------------------------- |
+| **`scripts/`**                  | High-level dataset generation entry points                |
+| **`demos/`**                    | Visualisation and exploration scripts                     |
+| **`src/mops_data`**             | Core library                                              |
+| **`mops_data.generation`**      | Dataset generation pipelines and configuration            |
+| **`mops_data.asset_manager`**   | PartNet-Mobility annotation loading and asset handling    |
+| **`mops_data.envs`**            | Custom ManiSkill3 environments for rendering              |
+| **`mops_data.render`**          | Observation augmentation and shader configuration         |
+| **`xr_teleop`**                 | WebXR-based VR teleoperation controller. Experimental     |
 
 ### 🥽 VR Integration
-The `xr_teleop` module provides rudimentary VR teleoperation through WebXR. Serve the webpage and access it with a VR headset to send control commands. 
+The `xr_teleop` module provides rudimentary VR teleoperation through WebXR. Serve the webpage and access it with a VR headset to send control commands.
 
 > 🔜 **Coming Soon**: [IRIS](https://intuitive-robots.github.io/iris-project-page/) support!
 
 ## 📊 Features
 
 - 🎨 **Photoreal Simulation**: High-quality visual rendering for computer vision
-- 🤖 **Robotic Manipulation**: Specialized environments for manipulation tasks
-- 🏠 **Kitchen Environments**: Realistic household scenarios
-- 📦 **Object Diversity**: Support for cluttered tabletop scenarios
-- 🔧 **Extensible**: Modular design for custom environments
+- 🤖 **Robotic Manipulation**: Specialised environments for manipulation tasks
+- 🏠 **Kitchen Environments**: Realistic household scenarios built on RoboCasa
+- 📦 **Object Diversity**: Support for cluttered tabletop and single-object scenarios
+- 🔧 **Extensible**: Modular pipeline and config design for custom datasets
 
 ## 📝 Citation
 
 If you use MOPS-data in your research, please cite:
 
 ```bibtex
-@article{li2025mops,
+@article{li2026mops,
   title={Multi-Objective Photoreal Simulation (MOPS) Dataset for Computer Vision in Robotic Manipulation},
   author={
     Maximilian Xiling Li and
     Paul Mattes and
     Nils Blank and
-    Korbinian Franz Rudolf and
-    Paul Werker L\"odige and
     Rudolf Lioutikov
   },
-  year={2025}
+  year={2026}
 }
 ```
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our development setup above and feel free to submit issues and pull requests.
+We welcome contributions! Please see the development setup above and feel free to submit issues and pull requests.
 
 ## 📄 License
 
