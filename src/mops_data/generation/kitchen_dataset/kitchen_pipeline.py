@@ -1,8 +1,10 @@
+import gc
 from typing import Dict, Optional
 
 import gymnasium as gym
 import numpy as np
 import pandas as pd
+import torch
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
@@ -80,13 +82,16 @@ class KitchenDatasetPipeline(BaseDatasetPipeline):
                     return obs, current_variation
 
                 print(
-                    f"Warning: Low quality render. (attempt {attempt+1}). Resampling variation."
+                    f"Warning: Low quality render. (attempt {attempt + 1}). Resampling variation."
                 )
             except Exception as e:
-                print(f"Error rendering. (attempt {attempt+1}): {e}. Retrying...")
+                print(f"Error rendering. (attempt {attempt + 1}): {e}. Retrying...")
                 raise e
             finally:
                 gym_env.close()
+                del gym_env
+                gc.collect()
+                torch.cuda.empty_cache()
 
         print(
             f"Error: Failed to get a valid render after {self.config.max_resampling_attempts} attempts."

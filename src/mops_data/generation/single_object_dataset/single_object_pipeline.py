@@ -1,8 +1,10 @@
+import gc
 import itertools
 from typing import Dict, List, Optional
 
 import gymnasium as gym
 import numpy as np
+import torch
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
@@ -75,17 +77,23 @@ class BalancedSingleObjectDatasetPipeline(BaseDatasetPipeline):
                 if render_env.is_valid_render(obs, self.config.min_segments_threshold):
                     obs = render_env.build_render_data(obs)
                     gym_env.close()
+                    del gym_env
+                    gc.collect()
+                    torch.cuda.empty_cache()
                     return obs, current_variation
 
                 print(
-                    f"Warning: Low quality render for {asset_id_str} (attempt {attempt+1}). Resampling variation."
+                    f"Warning: Low quality render for {asset_id_str} (attempt {attempt + 1}). Resampling variation."
                 )
             except Exception as e:
                 print(
-                    f"Error rendering {asset_id_str} (attempt {attempt+1}): {e}. Retrying..."
+                    f"Error rendering {asset_id_str} (attempt {attempt + 1}): {e}. Retrying..."
                 )
             finally:
                 gym_env.close()
+                del gym_env
+                gc.collect()
+                torch.cuda.empty_cache()
 
         print(
             f"Error: Failed to get a valid render for {asset_id_str} after {self.config.max_resampling_attempts} attempts."
