@@ -1,16 +1,19 @@
-import gc
-from typing import Dict, Optional
+from typing import Dict
 
-import gymnasium as gym
 import numpy as np
 import pandas as pd
-import torch
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-from mops_data.envs.dataset_envs.base_rendering_env import DatasetRenderEnv
 from mops_data.generation.base_pipeline import BaseDatasetPipeline
 from mops_data.generation.hdf_writer import HDF5Writer
+from mops_data.generation.subprocess_renderer import (
+    SPLIT_SEED_OFFSETS,
+    render_in_subprocess,
+)
+
+ENV_ID = "KitchenRenderEnv-v1"
+ENV_MODULE = "mops_data.envs.dataset_envs"
 
 
 class KitchenDatasetPipeline(BaseDatasetPipeline):
@@ -39,63 +42,46 @@ class KitchenDatasetPipeline(BaseDatasetPipeline):
         }
         return plan
 
-    def _create_render_env(self, asset_df: pd.DataFrame, variation: Dict):
-        """Create a render environment for a given asset and variation."""
-        env_kwargs = {
-            "render_mode": "rgb_array",
-            "obs_mode": self.config.obs_mode,
-            "image_size": self.config.image_size,
-            "camera_distance": self.config.camera_distance,
-            "camera_elevation": variation["viewpoint"]["elevation"],
-            "camera_azimuth": variation["viewpoint"]["azimuth"],
-            "lighting_type": variation["lighting"]["type"],
-            "lighting_intensity": variation["lighting"]["intensity"],
-            "light_temperature": variation["lighting"]["temperature"],
-            "sensor_configs": dict(shader_pack="rt"),
-            "asset_df": asset_df,
+    def _build_env_kwargs(self, asset_df: pd.DataFrame, variation: Dict) -> Dict:
+        """Build kwargs dict for gym.make (must be picklable)."""
+        return {
+            k: v
+            for k, v in {
+                "render_mode": "rgb_array",
+                "obs_mode": self.config.obs_mode,
+                "image_size": self.config.image_size,
+                "camera_distance": self.config.camera_distance,
+                "camera_elevation": variation["viewpoint"]["elevation"],
+                "camera_azimuth": variation["viewpoint"]["azimuth"],
+                "lighting_type": variation["lighting"]["type"],
+                "lighting_intensity": variation["lighting"]["intensity"],
+                "light_temperature": variation["lighting"]["temperature"],
+                "sensor_configs": dict(shader_pack="rt"),
+                "asset_df": asset_df,
+            }.items()
+            if v is not None
         }
-        return gym.make(
-            "KitchenRenderEnv-v1",
-            **{k: v for k, v in env_kwargs.items() if v is not None},
-        )
 
     def _render_with_retry(
-        self, asset_df: pd.DataFrame
-    ) -> Optional[Dict[str, np.ndarray]]:
-        """Render an asset_subset, retrying with new variations on failure or low quality."""
+        self,
+        asset_df: pd.DataFrame,
+        variations: list,
+        image_seed: int,
+    ) -> tuple:
+        """Render in a subprocess, retrying with new variations on failure."""
+        attempts = [
+            {
+                "env_kwargs": self._build_env_kwargs(asset_df, var),
+                "seed": image_seed + attempt_idx,
+                "num_steps": 2,
+                "min_segments": self.config.min_segments_threshold,
+            }
+            for attempt_idx, var in enumerate(variations)
+        ]
 
-        resampling_attempts = self.config.max_resampling_attempts
-        variations = self._sample_variations_for_asset(resampling_attempts)
-        for attempt in range(resampling_attempts):
-            current_variation = variations[attempt]
-            gym_env = self._create_render_env(asset_df, current_variation)
-            try:
-                obs, _ = gym_env.reset(seed=self.config.random_seed + attempt)
-                # Step environment a few times for stability
-                for _ in range(2):
-                    obs, _, _, _, _ = gym_env.step(None)
-
-                render_env: DatasetRenderEnv = gym_env.unwrapped
-
-                if render_env.is_valid_render(obs, self.config.min_segments_threshold):
-                    obs = render_env.build_render_data(obs)
-                    return obs, current_variation
-
-                print(
-                    f"Warning: Low quality render. (attempt {attempt + 1}). Resampling variation."
-                )
-            except Exception as e:
-                print(f"Error rendering. (attempt {attempt + 1}): {e}. Retrying...")
-                raise e
-            finally:
-                gym_env.close()
-                del gym_env
-                gc.collect()
-                torch.cuda.empty_cache()
-
-        print(
-            f"Error: Failed to get a valid render after {self.config.max_resampling_attempts} attempts."
-        )
+        data, attempt_idx = render_in_subprocess(ENV_ID, ENV_MODULE, attempts)
+        if data is not None:
+            return data, variations[attempt_idx]
         return None, None
 
     def _generate_images_for_class_split(
@@ -111,13 +97,28 @@ class KitchenDatasetPipeline(BaseDatasetPipeline):
             total=target_count, desc=f"  {split.capitalize():<5} images", unit="img"
         )
 
+        split_offset = SPLIT_SEED_OFFSETS[split]
         generated_count = 0
+        attempt_index = 0
 
         while generated_count < target_count:
-            random_set = assets.sample(40)
+            # Deterministic per-image seed independent of other splits
+            image_seed = self.config.random_seed + split_offset + attempt_index
+            rng = np.random.RandomState(image_seed)
 
-            # If Render is invalid, try the next asset
-            render_data, variation = self._render_with_retry(random_set)
+            random_set = assets.sample(40, random_state=rng)
+
+            # Seed global RNG for variation sampling (used by _sample_variations_for_asset)
+            np.random.seed(image_seed)
+            variations = self._sample_variations_for_asset(
+                self.config.max_resampling_attempts
+            )
+
+            render_data, variation = self._render_with_retry(
+                random_set, variations, image_seed
+            )
+            attempt_index += 1
+
             if render_data is None:
                 continue
 
@@ -127,7 +128,6 @@ class KitchenDatasetPipeline(BaseDatasetPipeline):
                 "image_size": self.config.image_size,
             }
 
-            # Save Image
             writer.add_image(
                 class_name=class_name,
                 render_params=render_params,

@@ -1,16 +1,19 @@
-import gc
 import itertools
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-import gymnasium as gym
 import numpy as np
-import torch
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-from mops_data.envs.dataset_envs.base_rendering_env import DatasetRenderEnv
 from mops_data.generation.base_pipeline import BaseDatasetPipeline
 from mops_data.generation.hdf_writer import HDF5Writer
+from mops_data.generation.subprocess_renderer import (
+    SPLIT_SEED_OFFSETS,
+    render_in_subprocess,
+)
+
+ENV_ID = "SingleObjectRenderEnv-v1"
+ENV_MODULE = "mops_data.envs.dataset_envs"
 
 
 class BalancedSingleObjectDatasetPipeline(BaseDatasetPipeline):
@@ -35,69 +38,46 @@ class BalancedSingleObjectDatasetPipeline(BaseDatasetPipeline):
             }
         return plan
 
-    def _create_render_env(self, asset_info: Dict, variation: Dict):
-        """Create a render environment for a given asset and variation."""
-        env_kwargs = {
-            "render_mode": "rgb_array",
-            "obs_mode": self.config.obs_mode,
-            "image_size": self.config.image_size,
-            "camera_distance": self.config.camera_distance,
-            "camera_elevation": variation["viewpoint"]["elevation"],
-            "camera_azimuth": variation["viewpoint"]["azimuth"],
-            "lighting_type": variation["lighting"]["type"],
-            "lighting_intensity": variation["lighting"]["intensity"],
-            "light_temperature": variation["lighting"]["temperature"],
-            "sensor_configs": dict(shader_pack="rt"),
-            "mob_id": asset_info.get("dir_name"),
+    def _build_env_kwargs(self, asset_info: Dict, variation: Dict) -> Dict:
+        """Build kwargs dict for gym.make (must be picklable)."""
+        return {
+            k: v
+            for k, v in {
+                "render_mode": "rgb_array",
+                "obs_mode": self.config.obs_mode,
+                "image_size": self.config.image_size,
+                "camera_distance": self.config.camera_distance,
+                "camera_elevation": variation["viewpoint"]["elevation"],
+                "camera_azimuth": variation["viewpoint"]["azimuth"],
+                "lighting_type": variation["lighting"]["type"],
+                "lighting_intensity": variation["lighting"]["intensity"],
+                "light_temperature": variation["lighting"]["temperature"],
+                "sensor_configs": dict(shader_pack="rt"),
+                "mob_id": asset_info.get("dir_name"),
+            }.items()
+            if v is not None
         }
-        return gym.make(
-            "SingleObjectRenderEnv-v1",
-            **{k: v for k, v in env_kwargs.items() if v is not None},
-        )
 
-    def _render_with_retry(self, asset_info: Dict) -> Optional[Dict[str, np.ndarray]]:
-        """Render an asset, retrying with new variations on failure or low quality."""
+    def _render_with_retry(
+        self,
+        asset_info: Dict,
+        variations: list,
+        image_seed: int,
+    ) -> tuple:
+        """Render in a subprocess, retrying with new variations on failure."""
+        attempts = [
+            {
+                "env_kwargs": self._build_env_kwargs(asset_info, var),
+                "seed": image_seed + attempt_idx,
+                "num_steps": 3,
+                "min_segments": self.config.min_segments_threshold,
+            }
+            for attempt_idx, var in enumerate(variations)
+        ]
 
-        resampling_attempts = self.config.max_resampling_attempts
-
-        asset_id_str = str(
-            asset_info.get("model_id") or asset_info.get("dir_name", "N/A")
-        )
-        variations = self._sample_variations_for_asset(resampling_attempts)
-        for attempt in range(resampling_attempts):
-            current_variation = variations[attempt]
-            gym_env = self._create_render_env(asset_info, current_variation)
-            try:
-                obs, _ = gym_env.reset(seed=self.config.random_seed + attempt)
-                # Step environment a few times for stability
-                for _ in range(3):
-                    obs, _, _, _, _ = gym_env.step(None)
-
-                render_env: DatasetRenderEnv = gym_env.unwrapped
-                if render_env.is_valid_render(obs, self.config.min_segments_threshold):
-                    obs = render_env.build_render_data(obs)
-                    gym_env.close()
-                    del gym_env
-                    gc.collect()
-                    torch.cuda.empty_cache()
-                    return obs, current_variation
-
-                print(
-                    f"Warning: Low quality render for {asset_id_str} (attempt {attempt + 1}). Resampling variation."
-                )
-            except Exception as e:
-                print(
-                    f"Error rendering {asset_id_str} (attempt {attempt + 1}): {e}. Retrying..."
-                )
-            finally:
-                gym_env.close()
-                del gym_env
-                gc.collect()
-                torch.cuda.empty_cache()
-
-        print(
-            f"Error: Failed to get a valid render for {asset_id_str} after {self.config.max_resampling_attempts} attempts."
-        )
+        data, attempt_idx = render_in_subprocess(ENV_ID, ENV_MODULE, attempts)
+        if data is not None:
+            return data, variations[attempt_idx]
         return None, None
 
     def _generate_images_for_class_split(
@@ -113,15 +93,25 @@ class BalancedSingleObjectDatasetPipeline(BaseDatasetPipeline):
             total=target_count, desc=f"  {split.capitalize():<5} images", unit="img"
         )
 
-        # Use itertools.cycle to loop through assets until target count is met
+        split_offset = SPLIT_SEED_OFFSETS[split]
         asset_cycler = itertools.cycle(enumerate(assets))
         generated_count = 0
+        attempt_index = 0
 
         while generated_count < target_count:
-            asset_idx, asset_info = next(asset_cycler)
+            image_seed = self.config.random_seed + split_offset + attempt_index
+            _, asset_info = next(asset_cycler)
 
-            # If Render is invalid, try the next asset
-            render_data, variation = self._render_with_retry(asset_info)
+            np.random.seed(image_seed)
+            variations = self._sample_variations_for_asset(
+                self.config.max_resampling_attempts
+            )
+
+            render_data, variation = self._render_with_retry(
+                asset_info, variations, image_seed
+            )
+            attempt_index += 1
+
             if render_data is None:
                 continue
 
@@ -132,7 +122,6 @@ class BalancedSingleObjectDatasetPipeline(BaseDatasetPipeline):
             }
             asset_id = asset_info["dir_name"]
 
-            # Save Image
             writer.add_image(
                 class_name=class_name,
                 asset_id=asset_id,
