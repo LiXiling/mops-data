@@ -21,10 +21,10 @@ from mops_data.generation.kitchen_dataset.kitchen_config import KitchenDatasetCo
 from mops_data.generation.kitchen_dataset.kitchen_generation import generate
 
 FULL_CONFIG = KitchenDatasetConfig(
-    output_path="data/mops_data/mops_kitchen_dataset.h5",
-    target_train_images_per_set=3000,
-    target_test_images_per_set=1000,
-    min_assets_per_class=5,
+    output_path="data/mops_data/mops_kitchen_dataset_100k.h5",
+    target_train_images_per_set=90000,
+    target_test_images_per_set=10000,
+    min_assets_per_class=8,
     image_size=(512, 512),
     light_temp_range=(2000, 10000),
     light_intensity_range=(0.6, 1.5),
