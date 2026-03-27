@@ -26,6 +26,7 @@ class HDF5Writer:
         "affordance": 9,
         "depth": 9,
         "normal": 9,
+        "is_partnet": 9,
         # Data for multi-object scenes
         "bbox": 9,  # Bounding Box with format [x, y, w, h, class_id]
     }
