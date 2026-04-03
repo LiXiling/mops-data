@@ -66,6 +66,55 @@ class DatasetRenderEnv(BaseEnv, abc.ABC):
         """
         pass
 
+    def _update_sensor_pose(self):
+        """Push current camera_elevation/azimuth to the live SAPIEN camera sensor.
+
+        Called after updating render params so that the next reset() renders from
+        the new viewpoint without triggering a full scene rebuild (reconfigure).
+        Subclasses with non-spherical cameras (e.g. kitchen fixture-relative)
+        should override this.
+        """
+        if not (hasattr(self, "_sensors") and "base_camera" in self._sensors):
+            return
+        elevation_rad = np.radians(self.camera_elevation)
+        azimuth_rad = np.radians(self.camera_azimuth)
+        x = self.camera_distance * np.cos(elevation_rad) * np.cos(azimuth_rad)
+        y = self.camera_distance * np.cos(elevation_rad) * np.sin(azimuth_rad)
+        z = self.camera_distance * np.sin(elevation_rad)
+        new_pose = sapien_utils.look_at(
+            eye=np.array([x, y, z]), target=np.asarray([0.0, 0.0, 0.0])
+        )
+        pose_sp = new_pose.sp if hasattr(new_pose, "sp") else new_pose
+        self._sensors["base_camera"].camera.set_local_pose(pose_sp)
+
+    def update_render_params(
+        self,
+        camera_elevation: float = None,
+        camera_azimuth: float = None,
+        lighting_type: str = None,
+        lighting_intensity: float = None,
+        light_temperature: float = None,
+        **_ignored,
+    ):
+        """Update viewpoint/lighting params and push camera pose to the live sensor.
+
+        Because ManiSkill uses reconfiguration_freq=0 by default, _load_scene and
+        _setup_sensors are only called once at gym.make() time.  Subsequent reset()
+        calls skip reconfiguration, so attribute changes must be accompanied by a
+        direct sensor update (_update_sensor_pose) to take effect.
+        """
+        if camera_elevation is not None:
+            self.camera_elevation = camera_elevation
+        if camera_azimuth is not None:
+            self.camera_azimuth = camera_azimuth
+        if lighting_type is not None:
+            self.lighting_type = lighting_type
+        if lighting_intensity is not None:
+            self.lighting_intensity = lighting_intensity
+        if light_temperature is not None:
+            self.light_temperature = light_temperature
+        self._update_sensor_pose()
+
     def _load_scene(self, options):
         self._load_objects(options)
         self.object_annotation_registry.register_missing_objects(self)

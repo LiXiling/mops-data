@@ -21,13 +21,14 @@ from mops_data.generation.kitchen_dataset.kitchen_config import KitchenDatasetCo
 from mops_data.generation.kitchen_dataset.kitchen_generation import generate
 
 FULL_CONFIG = KitchenDatasetConfig(
-    output_path="data/mops_data/mops_kitchen_dataset_100k.h5",
+    output_path="data/mops_data/mops_kitchen_dataset_100k_v2.h5",
     target_train_images_per_set=90000,
     target_test_images_per_set=10000,
-    min_assets_per_class=8,
-    image_size=(512, 512),
+    min_assets_per_class=5,
+    image_size=(256, 256),
     light_temp_range=(2000, 10000),
     light_intensity_range=(0.6, 1.5),
+    obs_mode="rgb+segmentation"
 )
 
 DEBUG_CONFIG = KitchenDatasetConfig(
@@ -38,6 +39,7 @@ DEBUG_CONFIG = KitchenDatasetConfig(
     image_size=(640, 360),
     light_temp_range=(2000, 10000),
     light_intensity_range=(0.6, 1.5),
+    obs_mode="rgb+depth+segmentation+normal"
 )
 
 

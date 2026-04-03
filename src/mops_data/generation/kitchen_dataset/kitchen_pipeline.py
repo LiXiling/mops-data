@@ -15,8 +15,12 @@ from mops_data.generation.subprocess_renderer import (
 ENV_ID = "KitchenRenderEnv-v1"
 ENV_MODULE = "mops_data.envs.dataset_envs"
 
-BATCH_SIZE = 100
+BATCH_SIZE = 500
 NUM_WORKERS = 1
+# How many viewpoints to render from each scene before rebuilding it.
+# Scene rebuild (gym.make) is expensive (SAPIEN init + RoboCasa + URDF loads);
+# amortise that cost by rendering multiple camera angles per scene.
+N_VIEWPOINTS_PER_SCENE = 4
 
 
 class KitchenDatasetPipeline(BaseDatasetPipeline):
@@ -59,7 +63,7 @@ class KitchenDatasetPipeline(BaseDatasetPipeline):
                 "lighting_type": variation["lighting"]["type"],
                 "lighting_intensity": variation["lighting"]["intensity"],
                 "light_temperature": variation["lighting"]["temperature"],
-                "sensor_configs": dict(shader_pack="rt"),
+                "sensor_configs": dict(shader_pack="rt-fast"),
                 "asset_df": asset_df,
             }.items()
             if v is not None
@@ -73,16 +77,21 @@ class KitchenDatasetPipeline(BaseDatasetPipeline):
     ) -> dict:
         """Prepare a single render job with deterministic seeding.
 
-        Each job gets its own seed derived from the split offset and
-        attempt index, keeping results independent of batch layout.
+        Jobs are grouped into scenes: every N_VIEWPOINTS_PER_SCENE consecutive
+        jobs share the same asset selection (scene_key) so the subprocess worker
+        can reuse the same gym env across them.  Within a scene, each job uses a
+        different viewpoint variation so the renders are distinct.
         """
         split_offset = SPLIT_SEED_OFFSETS[split]
+
+        # Scene-level seed: same for all viewpoints within one scene
+        scene_idx = attempt_index // N_VIEWPOINTS_PER_SCENE
+        scene_seed = self.config.random_seed + split_offset + scene_idx
+        scene_rng = np.random.RandomState(scene_seed)
+        random_set = assets.sample(40, random_state=scene_rng)
+
+        # Viewpoint-level seed: unique per job for camera/lighting variation
         image_seed = self.config.random_seed + split_offset + attempt_index
-        rng = np.random.RandomState(image_seed)
-
-        random_set = assets.sample(40, random_state=rng)
-
-        # Seed global RNG for variation sampling
         np.random.seed(image_seed)
         variations = self._sample_variations_for_asset(
             self.config.max_resampling_attempts
@@ -100,6 +109,7 @@ class KitchenDatasetPipeline(BaseDatasetPipeline):
 
         return {
             "job_id": attempt_index,
+            "scene_key": scene_idx,  # worker closes/recreates env when this changes
             "attempts": attempts,
             "variations": variations,
         }
@@ -117,33 +127,40 @@ class KitchenDatasetPipeline(BaseDatasetPipeline):
             return
 
         pbar = tqdm(
-            total=target_count, desc=f"  {split.capitalize():<5} images", unit="img"
+            total=target_count,
+            desc=f"  {split.capitalize():<5} images",
+            unit="img",
+            dynamic_ncols=True,
         )
 
         generated_count = 0
         attempt_index = 0
+        total_attempts = 0
 
         while generated_count < target_count:
-            # Prepare a batch of render jobs with deterministic seeds
             n_jobs = BATCH_SIZE * NUM_WORKERS
+
+            # Prepare a batch of render jobs with deterministic seeds
             jobs = {}
             for _ in range(n_jobs):
                 job = self._prepare_render_job(assets, split, attempt_index)
                 jobs[job["job_id"]] = job
                 attempt_index += 1
 
-            # Split into per-worker batches and render in parallel
             job_list = list(jobs.values())
             batches = [
                 job_list[i : i + BATCH_SIZE]
                 for i in range(0, len(job_list), BATCH_SIZE)
             ]
-            results = render_batch_parallel(ENV_ID, ENV_MODULE, batches)
 
-            # Process results in job_id order for deterministic writes
-            for result in sorted(results, key=lambda r: r["job_id"]):
+            # render_batch_parallel is a generator: yields one result per render.
+            # This allows tqdm to update after every individual image rather than
+            # waiting for the entire batch to complete.
+            for result in render_batch_parallel(ENV_ID, ENV_MODULE, batches):
                 if generated_count >= target_count:
                     break
+
+                total_attempts += 1
                 if result["data"] is None:
                     continue
 
@@ -163,6 +180,10 @@ class KitchenDatasetPipeline(BaseDatasetPipeline):
                 )
                 generated_count += 1
                 pbar.update(1)
+                pbar.set_postfix(
+                    hit_rate=f"{generated_count / total_attempts:.0%}",
+                    refresh=False,
+                )
 
         pbar.close()
 

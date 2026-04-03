@@ -1,5 +1,7 @@
 import datetime
 import json
+import queue
+import threading
 from typing import Any, List, Optional
 
 import h5py
@@ -17,18 +19,18 @@ class HDF5Writer:
 
     # Specification for all supported data types.
     # The key is the group name in HDF5 and the kwarg name in `add_image`.
-    # The value is the GZIP compression level.
+    # The value is the GZIP compression level (4 = good ratio, ~3× faster than 9).
     DATA_SPEC = {
         # Standard masks and maps
-        "semantic": 9,
-        "instance": 9,
-        "part": 9,
-        "affordance": 9,
-        "depth": 9,
-        "normal": 9,
-        "is_partnet": 9,
+        "semantic": 4,
+        "instance": 4,
+        "part": 4,
+        "affordance": 4,
+        "depth": 4,
+        "normal": 4,
+        "is_partnet": 4,
         # Data for multi-object scenes
-        "bbox": 9,  # Bounding Box with format [x, y, w, h, class_id]
+        "bbox": 4,  # Bounding Box with format [x, y, w, h, class_id]
     }
 
     def __init__(
@@ -47,7 +49,8 @@ class HDF5Writer:
                          per-image class tracking.
         """
         self.h5_file = h5py.File(file_path, "w")
-        self.images_written = 0
+        self.images_written = 0  # enqueued count (main thread only)
+        self._images_flushed = 0  # written-to-disk count (write thread only)
         self.has_classes = class_names is not None
 
         # Create main groups
@@ -83,6 +86,14 @@ class HDF5Writer:
                 "class_labels", max_images_estimate, np.int32
             )
 
+        # Background write thread: decouples gzip compression from rendering.
+        # maxsize creates backpressure so the main loop doesn't race too far ahead.
+        self._write_queue: queue.Queue = queue.Queue(maxsize=200)
+        self._write_thread = threading.Thread(
+            target=self._write_worker, daemon=True, name="hdf5-writer"
+        )
+        self._write_thread.start()
+
     def _create_resizable_dataset(self, name, shape_est, dtype):
         """Helper to create a 1D resizable dataset in the metadata group."""
         group = self.labels_group if name == "class_labels" else self.metadata_group
@@ -106,27 +117,14 @@ class HDF5Writer:
             data = json.dumps(data).encode("utf-8")
         group.create_dataset(name, data=data)
 
-    def add_image(self, **kwargs: Any) -> str:
-        """
-        Adds a single data entry (image, masks, etc.) to the dataset.
-
-        Args (passed as keyword arguments):
-            image (np.ndarray): The main RGB image array.
-            asset_id (str): The ID of the primary asset or scene.
-            render_params (dict): Rendering parameters, must contain 'split'.
-            class_name (str): The object class name (required for class-based datasets).
-            **other_data: Other data arrays, keys must match DATA_SPEC
-                          (e.g., semantic=..., depth=...).
-        """
-        image_idx = self.images_written
+    def _write_one(self, image_idx: int, kwargs: dict):
+        """Synchronous write executed on the write thread."""
         image_id = f"image_{image_idx:06d}"
 
-        # Store the main image
         self._create_compressed_dataset(
-            self.images_group, image_id, kwargs["image"], comp_level=6
+            self.images_group, image_id, kwargs["image"], comp_level=4
         )
 
-        # Prepare metadata record
         metadata = {
             "image_id": image_id,
             "asset_id": kwargs["asset_id"],
@@ -142,7 +140,6 @@ class HDF5Writer:
                 }
             )
 
-        # Store all other specified data types
         for name, comp_level in self.DATA_SPEC.items():
             data = kwargs.get(name)
             metadata[f"has_{name}"] = data is not None
@@ -151,7 +148,6 @@ class HDF5Writer:
                     self.data_groups[name], image_id, data, comp_level
                 )
 
-        # Store metadata and labels in pre-allocated arrays
         self.preallocated_datasets["image_info"][image_idx] = json.dumps(metadata)
         self.preallocated_datasets["splits"][image_idx] = (
             kwargs["render_params"]["split"] == "train"
@@ -161,13 +157,49 @@ class HDF5Writer:
                 "class_idx"
             ]
 
+        self._images_flushed += 1
+        if self._images_flushed % 100 == 0:
+            print(f"Written {self._images_flushed} images...")
+
+    def _write_worker(self):
+        """Background thread: drains the write queue and calls _write_one."""
+        while True:
+            item = self._write_queue.get()
+            if item is None:  # poison pill — shut down
+                self._write_queue.task_done()
+                break
+            image_idx, kwargs = item
+            try:
+                self._write_one(image_idx, kwargs)
+            except Exception as e:
+                print(f"HDF5 write error for image_{image_idx:06d}: {e}")
+            finally:
+                self._write_queue.task_done()
+
+    def add_image(self, **kwargs: Any) -> str:
+        """
+        Enqueues a single data entry for writing.  Returns immediately;
+        the actual h5py writes happen on the background write thread.
+
+        Args (passed as keyword arguments):
+            image (np.ndarray): The main RGB image array.
+            asset_id (str): The ID of the primary asset or scene.
+            render_params (dict): Rendering parameters, must contain 'split'.
+            class_name (str): The object class name (required for class-based datasets).
+            **other_data: Other data arrays, keys must match DATA_SPEC
+                          (e.g., semantic=..., depth=...).
+        """
+        image_idx = self.images_written
         self.images_written += 1
-        if self.images_written % 100 == 0:
-            print(f"Written {self.images_written} images...")
-        return image_id
+        self._write_queue.put((image_idx, kwargs))
+        return f"image_{image_idx:06d}"
 
     def finalize(self):
         """Finalizes the file by trimming datasets and writing summary metadata."""
+        # Drain the write queue before touching any datasets
+        self._write_queue.put(None)  # poison pill
+        self._write_thread.join()
+
         if self.images_written == 0:
             print("Warning: No images were written.")
             return

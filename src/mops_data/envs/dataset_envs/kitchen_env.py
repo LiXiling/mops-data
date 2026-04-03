@@ -62,7 +62,35 @@ class KitchenEnv(DatasetRenderEnv):
             shadow=False,
         )
 
+    def _update_sensor_pose(self):
+        """Reposition the camera around the target fixture for a new viewpoint.
+
+        Uses camera_azimuth as a lateral offset angle (radians mapped from degrees)
+        around the fixture's forward axis, so different azimuth values produce
+        meaningfully different viewpoints of the same counter.
+        """
+        if not (
+            hasattr(self, "_sensors")
+            and "base_camera" in self._sensors
+            and hasattr(self, "target_fixture")
+            and self.target_fixture is not None
+        ):
+            return
+        target_pos = self.target_fixture.pos
+        rot_mat = quat2mat(self.target_fixture.quat)
+        forward_dir = rot_mat @ np.array([0.0, 1.0, 0.0])
+        camera_pos = target_pos - forward_dir * 1.5
+        camera_pos[2] = 1.6
+        # Encode lateral jitter deterministically via camera_azimuth
+        azimuth_rad = np.radians(self.camera_azimuth)
+        camera_pos[0] += np.cos(azimuth_rad) * 0.3
+        camera_pos[1] += np.sin(azimuth_rad) * 0.3
+        new_pose = sapien_utils.look_at(camera_pos, target_pos, [0, 0, 1])
+        pose_sp = new_pose.sp if hasattr(new_pose, "sp") else new_pose
+        self._sensors["base_camera"].camera.set_local_pose(pose_sp)
+
     def _load_objects(self, options: Dict[str, Any]):
+        self.asset_ids = []  # Reset for each new render (env may be reused)
         # Preroll batched episode RNG to randomize kitchen env
         for _ in range(np.random.randint(1, 100)):
             for i in range(self.num_envs):
@@ -107,6 +135,7 @@ class KitchenEnv(DatasetRenderEnv):
             size, offset = reset_region["size"], reset_region["offset"]
 
             asset_info = self.asset_df.sample(1).iloc[0]
+            #print(f"Placing asset {asset_info['dir_name']}")
             self.asset_ids.append(str(asset_info["dir_name"]))
 
             local_pos = offset + np.array(

@@ -6,7 +6,9 @@ that accumulate over thousands of renders in SAPIEN's ray-tracing backend.
 """
 
 import multiprocessing as mp
-from typing import Any, Dict, List, Optional, Tuple
+import time
+from multiprocessing.connection import wait as _mp_wait
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
 _mp_ctx = mp.get_context("spawn")
 
@@ -133,7 +135,13 @@ def _worker_batch(
     """Subprocess worker that renders a batch of jobs.
 
     Pays the Python / SAPIEN / torch import cost only once for the whole
-    batch, then creates and tears down a gym env per job.
+    batch.  A single gym env is created for the first job and then reused
+    across all subsequent jobs: ``update_render_params`` swaps camera /
+    lighting / asset params before each ``reset()``, avoiding repeated
+    SAPIEN physics-engine initialisation overhead.
+
+    If any attempt raises an exception the env is considered broken and is
+    closed; it will be recreated from scratch for the next job.
 
     Args:
         conn: Write end of a ``multiprocessing.Pipe``.
@@ -147,26 +155,50 @@ def _worker_batch(
 
     import gymnasium as gym
 
+    gym_env = None
+    render_env = None
+    current_scene_key = object()  # sentinel: guaranteed != any real scene_key
+
+    def _close_env():
+        nonlocal gym_env, render_env
+        if gym_env is not None:
+            try:
+                gym_env.close()
+            except Exception:
+                pass
+            gym_env = None
+            render_env = None
+
     results = []
     for job in render_jobs:
+        # Rebuild the scene (gym.make) only when the scene group changes.
+        # Jobs with the same scene_key share assets/kitchen-layout; only camera
+        # and lighting differ, which update_render_params handles via
+        # _update_sensor_pose without a full reconfigure.
+        scene_key = job.get("scene_key")
+        if scene_key != current_scene_key:
+            _close_env()
+            current_scene_key = scene_key
+
         job_result = {"job_id": job["job_id"], "data": None, "attempt_idx": None}
         for idx, attempt in enumerate(job["attempts"]):
-            gym_env = None
             try:
-                gym_env = gym.make(env_id, **attempt["env_kwargs"])
+                if gym_env is None:
+                    gym_env = gym.make(env_id, **attempt["env_kwargs"])
+                    render_env = gym_env.unwrapped
+                else:
+                    render_env.update_render_params(**attempt["env_kwargs"])
+
                 obs, _ = gym_env.reset(seed=attempt["seed"])
                 for _ in range(attempt["num_steps"]):
                     obs, _, _, _, _ = gym_env.step(None)
 
-                render_env = gym_env.unwrapped
                 if render_env.is_valid_render(obs, attempt["min_segments"]):
                     data = render_env.build_render_data(obs)
                     data = {
                         k: v.numpy() if hasattr(v, "numpy") else v
                         for k, v in data.items()
                     }
-                    gym_env.close()
-                    gym_env = None
                     job_result = {
                         "job_id": job["job_id"],
                         "data": data,
@@ -183,15 +215,12 @@ def _worker_batch(
                     f"Subprocess: Render error "
                     f"(job {job['job_id']}, attempt {idx + 1}): {e}"
                 )
-            finally:
-                if gym_env is not None:
-                    try:
-                        gym_env.close()
-                    except Exception:
-                        pass
-        results.append(job_result)
+                _close_env()  # Env state is unknown; recreate for next attempt
+                current_scene_key = object()  # force rebuild on next job too
+        conn.send(job_result)  # stream each result immediately
 
-    conn.send(results)
+    _close_env()
+    conn.send(None)  # sentinel: batch complete
 
 
 def render_batch_parallel(
@@ -199,26 +228,29 @@ def render_batch_parallel(
     env_module: str,
     job_batches: List[List[Dict[str, Any]]],
     timeout_per_job: float = 30,
-) -> List[Dict[str, Any]]:
+) -> Generator[Dict[str, Any], None, None]:
     """Run batches of render jobs across parallel subprocesses.
 
     Each batch runs in its own ``"spawn"`` subprocess so GPU memory is
-    fully released when it exits.  Multiple batches run concurrently.
+    fully released when it exits.  Results are **yielded one at a time**
+    as the worker sends them, so the caller's progress bar updates after
+    every individual render instead of waiting for the whole batch.
 
     Args:
         env_id: Gymnasium environment ID.
         env_module: Module path to import for env registration.
         job_batches: ``[batch_0, batch_1, ...]`` where each batch is a list
             of job dicts with keys ``job_id`` and ``attempts``.
-        timeout_per_job: Seconds budgeted per job; total timeout for a
-            subprocess is ``timeout_per_job * len(batch)``.
+        timeout_per_job: Seconds before a silent subprocess is considered
+            stalled and killed.
 
-    Returns:
-        Flat list of result dicts (ordered by batch, then by job within
-        each batch) with keys ``job_id``, ``data``, ``attempt_idx``.
+    Yields:
+        Result dicts with keys ``job_id``, ``data``, ``attempt_idx`` —
+        one per job, in completion order.
     """
-    pipes = []
-    procs = []
+    procs: List[mp.Process] = []
+    # active maps parent_conn -> (proc, last_message_time)
+    active: Dict[mp.connection.Connection, tuple] = {}
 
     for batch in job_batches:
         parent_conn, child_conn = _mp_ctx.Pipe(duplex=False)
@@ -228,29 +260,45 @@ def render_batch_parallel(
         )
         proc.start()
         child_conn.close()
-        pipes.append(parent_conn)
-        procs.append((proc, len(batch)))
+        procs.append(proc)
+        active[parent_conn] = (proc, time.monotonic())
 
-    all_results = []
-    for parent_conn, (proc, batch_len) in zip(pipes, procs):
-        timeout = timeout_per_job * batch_len
-        try:
-            if parent_conn.poll(timeout):
-                results = parent_conn.recv()
-                all_results.extend(results)
-            else:
-                print(f"Warning: Batch subprocess timed out after {timeout:.0f}s")
-                proc.kill()
-                proc.join(timeout=10)
-        except EOFError:
-            print(
-                f"Warning: Batch subprocess crashed (exit code: {proc.exitcode})"
-            )
-        finally:
-            parent_conn.close()
-            proc.join(timeout=30)
+    try:
+        while active:
+            ready = _mp_wait(list(active.keys()), timeout=1.0)
+            now = time.monotonic()
+
+            for conn in ready:
+                proc, _ = active[conn]
+                try:
+                    msg = conn.recv()
+                except EOFError:
+                    print(f"Warning: Subprocess crashed (exit code: {proc.exitcode})")
+                    del active[conn]
+                    conn.close()
+                    continue
+
+                if msg is None:  # sentinel — this subprocess finished cleanly
+                    del active[conn]
+                    conn.close()
+                else:
+                    active[conn] = (proc, now)  # reset stall timer
+                    yield msg
+
+            # Kill subprocesses that have gone silent for too long
+            for conn, (proc, last_time) in list(active.items()):
+                if now - last_time > timeout_per_job:
+                    print(
+                        f"Warning: Subprocess stalled for >{timeout_per_job:.0f}s, killing"
+                    )
+                    proc.kill()
+                    del active[conn]
+                    conn.close()
+    finally:
+        # Ensure all subprocesses are cleaned up even on early generator exit
+        for conn in list(active.keys()):
+            conn.close()
+        for proc in procs:
             if proc.is_alive():
                 proc.kill()
-                proc.join(timeout=10)
-
-    return all_results
+            proc.join(timeout=10)
