@@ -11,7 +11,15 @@ from mops_data.generation.single_object_dataset.single_object_pipeline import (
 
 
 def generate(dataset_config: SingleObjectDatasetConfig):
-    # Example usage
+    """Run the single-object generation pipeline end-to-end.
+
+    Loads PartNet-Mobility annotations, applies the asset blacklist, builds a
+    :class:`BalancedSingleObjectDatasetPipeline`, and calls ``create_dataset()``.
+    Prefer invoking via ``scripts/generate_single_object.py`` for CLI convenience.
+
+    Args:
+        dataset_config: Fully-configured :class:`SingleObjectDatasetConfig`.
+    """
     print("--- Single Object Dataset Generation Script ---")
     start_time = time.time()
     print(

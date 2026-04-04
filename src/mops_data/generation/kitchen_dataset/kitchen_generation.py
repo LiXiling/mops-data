@@ -7,8 +7,16 @@ from mops_data.generation.kitchen_dataset.kitchen_pipeline import KitchenDataset
 
 
 def generate(dataset_config: KitchenDatasetConfig):
-    # Example usage
-    print("--- Single Object Dataset Generation Script ---")
+    """Run the kitchen scene generation pipeline end-to-end.
+
+    Filters to non-large PartNet objects, applies the asset blacklist, builds a
+    :class:`KitchenDatasetPipeline`, and calls ``create_dataset()``.
+    Prefer invoking via ``scripts/generate_kitchen.py`` for CLI convenience.
+
+    Args:
+        dataset_config: Fully-configured :class:`KitchenDatasetConfig`.
+    """
+    print("--- Kitchen Dataset Generation Script ---")
     start_time = time.time()
     print(
         f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))}"

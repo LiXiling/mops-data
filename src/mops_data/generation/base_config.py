@@ -4,7 +4,12 @@ from typing import Dict, List, Tuple
 
 @dataclass(kw_only=True)
 class BaseDatasetConfig:
-    """Base class for dataset configuration."""
+    """Shared configuration for all MOPS dataset generation pipelines.
+
+    Subclasses must implement :meth:`get_viewpoints` to supply scene-appropriate
+    camera positions.  Viewpoints and lighting types are lazy-initialised in
+    ``__post_init__`` so subclass defaults take effect before the lists are built.
+    """
 
     output_path: str
     dataset_name: str = "mops_dataset"
@@ -33,8 +38,8 @@ class BaseDatasetConfig:
     light_intensity_range: Tuple[float, float] = (0.8, 1.2)
 
     # Generation parameters
-    viewpoints: List[Dict] = None
-    lighting_types: List[str] = None
+    viewpoints: List[Dict] | None = None
+    lighting_types: List[str] | None = None
 
     def __post_init__(self):
         if self.viewpoints is None:
@@ -45,11 +50,15 @@ class BaseDatasetConfig:
             self.lighting_types = ["studio", "natural", "dramatic"]
 
     def get_viewpoints(self, n_viewpoints: int) -> List[Dict]:
+        """Return *n_viewpoints* camera positions as dicts with ``azimuth`` and
+        ``elevation`` keys (degrees).  Must be implemented by subclasses."""
         raise NotImplementedError(
             "get_viewpoint method must be implemented in subclasses"
         )
 
 
+# PartNet-Mobility IDs that reliably cause simulation crashes (OOM, broken URDF,
+# physics instability).  Excluded from all pipelines during asset filtering.
 ASSET_BLACKLIST = [
     10356,
     10546,

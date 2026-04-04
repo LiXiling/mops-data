@@ -57,6 +57,14 @@ def parse_name(obj):
 
 
 class ObjectAnnotationRegistry:
+    """Per-simulation registry mapping SAPIEN segmentation IDs to class/affordance labels.
+
+    Populated by :class:`~mops_data.asset_manager.partnet_mobility_loader.PartNetMobilityLoader`
+    for articulated PartNet objects and by :meth:`register_missing_objects` for all other
+    actors (RoboCasa fixtures, background objects, etc.).  A fresh registry is created for
+    each environment instance.
+    """
+
     def __init__(self):
         self.anno_handler: mops_ah.AnnotationHandler = mops_ah.load_annotations()
 
@@ -66,10 +74,12 @@ class ObjectAnnotationRegistry:
         self.segm_id_to_affordance_id_map = {}
         self.partnet_segm_ids = set()
 
-    def get_num_affords(self):
+    def get_num_affords(self) -> int:
+        """Number of distinct affordance types in the annotation vocabulary."""
         return len(self.affordance_id_map)
 
-    def get_class_id(self, obj_id):
+    def get_class_id(self, obj_id: int) -> int:
+        """Return the class ID for *obj_id*, or -1 if not registered."""
         return self.segm_id_to_class_id_map.get(obj_id, -1)
 
     def add_partnet_object(
@@ -78,6 +88,17 @@ class ObjectAnnotationRegistry:
         class_name: str,
         linkname_to_affordances: dict,
     ):
+        """Register all links of a PartNet articulation.
+
+        Maps each link's per-scene segmentation ID to *class_name* and its
+        part-level affordances, and marks all links as PartNet origin.
+
+        Args:
+            partnet_link_obj: Top-level articulation returned by the URDF builder.
+            class_name: Semantic class (e.g. ``"Chair"``).
+            linkname_to_affordances: ``{link_name: [affordance, ...]}`` from the
+                annotation JSON.
+        """
         for link in partnet_link_obj.get_links():
             # Get Unique ID from ManiSkill simulation
             link_id = link._objs[0].entity.per_scene_id
@@ -101,6 +122,11 @@ class ObjectAnnotationRegistry:
         self.segm_id_to_affordance_id_map[obj_id] = np.asarray(aff_bitlist, dtype=bool)
 
     def register_missing_objects(self, env: BaseEnv):
+        """Auto-register any env objects not yet in the registry.
+
+        Infers class names from SAPIEN actor/link names using RoboCasa naming
+        conventions.  Called once after ``_load_scene`` completes.
+        """
         # Add Missing Objects
         for obj_id, obj in env.segmentation_id_map.items():
             # Skip Already Registered Objects
@@ -117,10 +143,16 @@ class ObjectAnnotationRegistry:
                 obj_id, self.anno_handler.get_affordance_list(class_name)[0]
             )
 
-    def is_partnet(self, obj_id):
+    def is_partnet(self, obj_id: int) -> bool:
+        """Return ``True`` if *obj_id* belongs to a PartNet-Mobility object."""
         return obj_id in self.partnet_segm_ids
 
-    def get_affordance_list(self, obj_id):
+    def get_affordance_list(self, obj_id: int) -> np.ndarray:
+        """Return the binary affordance vector for *obj_id*.
+
+        Falls back to the class-level vector if per-part data is unavailable,
+        then to all-zeros for completely unknown objects.
+        """
         if obj_id in self.segm_id_to_affordance_id_map:
             return self.segm_id_to_affordance_id_map[obj_id]
 

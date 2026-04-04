@@ -7,8 +7,16 @@ from mops_data.generation.clutter_dataset.clutter_pipeline import ClutterDataset
 
 
 def generate(dataset_config: ClutterDatasetConfig):
-    # Example usage
-    print("--- Single Object Dataset Generation Script ---")
+    """Run the tabletop clutter generation pipeline end-to-end.
+
+    Filters to non-large PartNet objects, applies the asset blacklist, builds a
+    :class:`ClutterDatasetPipeline`, and calls ``create_dataset()``.
+    Prefer invoking via ``scripts/generate_clutter.py`` for CLI convenience.
+
+    Args:
+        dataset_config: Fully-configured :class:`ClutterDatasetConfig`.
+    """
+    print("--- Clutter Dataset Generation Script ---")
     start_time = time.time()
     print(
         f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))}"
