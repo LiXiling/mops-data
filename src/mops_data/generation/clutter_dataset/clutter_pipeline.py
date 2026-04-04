@@ -124,7 +124,6 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
                 "split": split,
                 "variation": variation,
                 "image_size": self.config.image_size,
-                # TODO: Mulitple Classes, Multiple IDs
             }
 
             writer.add_image(

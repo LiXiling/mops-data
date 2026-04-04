@@ -240,7 +240,6 @@ class RoboCasaAffordanceKitchenEnv(RoboCasaKitchenEnv):
 
     @property
     def _default_sensor_configs(self):
-        # TODO (fix cameras to be where robocasa places them)
         pose = sapien_utils.look_at([3.0, -7.5, 2.5], [3.0, 0.0, 1.0])
         birdseye_pose = sapien_utils.look_at(eye=[2.0, -2, 4], target=[2, -2, 0.1])
         return [

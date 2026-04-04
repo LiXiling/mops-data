@@ -6,16 +6,16 @@ import torch
 from mani_skill.utils.registration import register_env
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
 
-from .single_object_env import DatasetRenderEnv
+from .base_rendering_env import DatasetRenderEnv
 
 
 @register_env("ClutterRenderEnv-v1", max_episode_steps=1)
 class ClutterEnv(DatasetRenderEnv):
-    """
-    Simplified rendering environment for dataset generation.
+    """Top-down tabletop clutter rendering environment.
 
-    Loads PartNet Mobility objects and renders them with configurable
-    camera, lighting, and background settings.
+    Scatters 8–15 random PartNet-Mobility objects on a table surface and
+    renders from overhead viewpoints.  Produces bounding boxes alongside
+    the standard segmentation/depth/affordance masks.
     """
 
     SUPPORTED_ROBOTS = ["none"]

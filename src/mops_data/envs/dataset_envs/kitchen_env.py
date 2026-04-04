@@ -90,13 +90,13 @@ class KitchenEnv(DatasetRenderEnv):
         self._sensors["base_camera"].camera.set_local_pose(pose_sp)
 
     def _load_objects(self, options: Dict[str, Any]):
+        """Load a kitchen, pick a counter, and place a mix of objects on it."""
         self.asset_ids = []  # Reset for each new render (env may be reused)
         # Preroll batched episode RNG to randomize kitchen env
         for _ in range(np.random.randint(1, 100)):
             for i in range(self.num_envs):
                 self._batched_episode_rng[i].randint(0, 120)
 
-        """Load a kitchen, pick a counter, and place a mix of objects on it."""
         self.scene_builder = RoboCasaSceneBuilder(self)
         self.scene_builder.build()
 
@@ -111,12 +111,9 @@ class KitchenEnv(DatasetRenderEnv):
 
         self.target_fixture = np.random.choice(valid_counters)
 
-        # --- FIX: Get ALL valid placement regions for the target fixture ---
-        # This returns a dictionary of regions, e.g., {"left": {...}, "middle": {...}}
         all_reset_regions = self.target_fixture.get_reset_regions(
             env=self, fixtures=fixtures
         )
-        # Convert the dictionary of regions into a list we can sample from.
         available_regions = list(all_reset_regions.values())
 
         if not available_regions:
@@ -135,7 +132,6 @@ class KitchenEnv(DatasetRenderEnv):
             size, offset = reset_region["size"], reset_region["offset"]
 
             asset_info = self.asset_df.sample(1).iloc[0]
-            #print(f"Placing asset {asset_info['dir_name']}")
             self.asset_ids.append(str(asset_info["dir_name"]))
 
             local_pos = offset + np.array(

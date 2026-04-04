@@ -6,18 +6,17 @@ import numpy as np
 from mops_data.generation.base_config import BaseDatasetConfig
 
 
-def generate_clutter_viewpoints(
+def generate_kitchen_viewpoints(
     n_viewpoints: int, random_seed: Optional[int] = None
 ) -> List[Dict]:
-    """
-    Very simple version: just sample randomly within front-biased ranges.
+    """Sample random kitchen camera viewpoints within a front-biased range.
 
     Args:
-        n_viewpoints: Number of viewpoints to generate
-        random_seed: Optional seed for reproducibility
+        n_viewpoints: Number of viewpoints to generate.
+        random_seed: Optional seed for reproducibility.
 
     Returns:
-        List of viewpoint dictionaries
+        List of ``{"elevation": float, "azimuth": float}`` dicts (degrees).
     """
     if random_seed is not None:
         np.random.seed(random_seed)
@@ -38,7 +37,7 @@ def generate_clutter_viewpoints(
 
 @dataclass(kw_only=True)
 class KitchenDatasetConfig(BaseDatasetConfig):
-    """Configuration for cluttered object dataset generation."""
+    """Configuration for kitchen scene dataset generation."""
 
     dataset_name: str = "mops_kitchen"
 
@@ -49,6 +48,6 @@ class KitchenDatasetConfig(BaseDatasetConfig):
     camera_distance: float = 0.5
 
     def get_viewpoints(self, n_viewpoints: int) -> List[Dict]:
-        return generate_clutter_viewpoints(
+        return generate_kitchen_viewpoints(
             n_viewpoints=n_viewpoints, random_seed=self.random_seed
         )

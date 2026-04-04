@@ -16,7 +16,6 @@ from transforms3d.euler import euler2quat
 from transforms3d.quaternions import qmult
 
 
-# from robocasa.utils.object_utils import obj_in_region, objs_intersect
 def rotate_2d_point(input, rot):
     """
     rotate a 2d vector counterclockwise
@@ -223,18 +222,7 @@ class UniformRandomSampler(ObjectPositionSampler):
 
         # Sample pos and quat for all objects assigned to this sampler
         for id in object_ids:
-            # First make sure the currently sampled object hasn't already been sampled
-            # assert (
-            #     obj.name not in placed_objects
-            # ), "Object '{}' has already been sampled!".format(obj.name)
-
             success = False
-
-            # get reference rotation
-            # euler2quat(0, 0, self.reference_rot)
-            # ref_quat = convert_quat(
-            #     mat2quat(euler2mat([0, 0, self.reference_rot])), to="wxyz"
-            # )
             ref_quat = euler2quat(0, 0, self.reference_rot)
 
             ### get boundary points ###
@@ -263,24 +251,8 @@ class UniformRandomSampler(ObjectPositionSampler):
                 object_x = object_x + base_offset[0]
                 object_y = object_y + base_offset[1]
                 object_z = self.z_offset + base_offset[2]
-                # if on_top:
-                #     #object_z -= obj.bottom_offset[-1]
-                #     object_z -= env.segmentation_id_map[id].bottom_offset[-1]
 
-                # random rotation
-                quat = self._sample_quat()
-                quat = qmult(ref_quat, quat)
-
-                # note (stao): what is init_quat? we might not need it
-                # if hasattr(obj, "init_quat"):
-                #     quat = quat_multiply(obj.init_quat, quat)
-                # quat = convert_quat(
-                #     quat_multiply(
-                #         convert_quat(ref_quat, to="xyzw"),
-                #         convert_quat(quat, to="xyzw"),
-                #     ),
-                #     to="wxyz",
-                # )
+                quat = qmult(ref_quat, self._sample_quat())
 
                 location_valid = True
 
@@ -296,7 +268,6 @@ class UniformRandomSampler(ObjectPositionSampler):
                     location_valid = False
                     continue
 
-                # TODO (stao): ensure no overlap
                 # objects cannot overlap
                 if self.ensure_valid_placement:
                     for (x, y, z), other_quat, other_obj in placed_objects.values():
@@ -319,6 +290,6 @@ class UniformRandomSampler(ObjectPositionSampler):
                     break
 
             if not success:
-                raise RandomizationError("Cannot place all objects ):")
+                raise RandomizationError("Cannot place all objects")
 
         return placed_objects

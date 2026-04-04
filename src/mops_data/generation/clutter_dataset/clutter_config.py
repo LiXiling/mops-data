@@ -9,15 +9,14 @@ from mops_data.generation.base_config import BaseDatasetConfig
 def generate_clutter_viewpoints(
     n_viewpoints: int, random_seed: Optional[int] = None
 ) -> List[Dict]:
-    """
-    Very simple version: just sample randomly within front-biased ranges.
+    """Sample random top-down clutter viewpoints within a front-biased range.
 
     Args:
-        n_viewpoints: Number of viewpoints to generate
-        random_seed: Optional seed for reproducibility
+        n_viewpoints: Number of viewpoints to generate.
+        random_seed: Optional seed for reproducibility.
 
     Returns:
-        List of viewpoint dictionaries
+        List of ``{"elevation": float, "azimuth": float}`` dicts (degrees).
     """
     if random_seed is not None:
         np.random.seed(random_seed)
