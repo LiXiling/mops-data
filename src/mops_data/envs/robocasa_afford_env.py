@@ -1,4 +1,3 @@
-
 import numpy as np
 from mani_skill.envs.tasks.mobile_manipulation.robocasa.kitchen import (
     RoboCasaKitchenEnv,
@@ -152,9 +151,7 @@ class RoboCasaAffordanceKitchenEnv(RoboCasaKitchenEnv):
         # self.scene.scene_offsets
 
         for env in range(self.num_envs):
-
             for k, v in self.unwrapped.scene.actors.items():
-
                 if "counter" in k:
                     counter_pos = v.pose.p[0]
 
@@ -181,7 +178,6 @@ class RoboCasaAffordanceKitchenEnv(RoboCasaKitchenEnv):
                     )
 
                     for elem in self.sampled_elements:
-
                         x_pos = sampler._sample_x()
                         y_pos = sampler._sample_y()
                         z_pos = 1

@@ -28,15 +28,18 @@ class AnnotationHandler:
     """
 
     def __init__(self):
-
-        with resources.files("mops_data.resources").joinpath(
-            "class_affordances.json"
-        ).open() as f:
+        with (
+            resources.files("mops_data.resources")
+            .joinpath("class_affordances.json")
+            .open() as f
+        ):
             self.class_affordance_df = pd.read_json(f, orient="records")
 
-        with resources.files("mops_data.resources").joinpath(
-            "partnet-mobility_affordances.json"
-        ).open() as f:
+        with (
+            resources.files("mops_data.resources")
+            .joinpath("partnet-mobility_affordances.json")
+            .open() as f
+        ):
             self.partnet_mobility_df = pd.read_json(f, orient="records")
 
         classes = ["Background"] + self.class_affordance_df[

@@ -203,10 +203,10 @@ class UniformRandomSampler(ObjectPositionSampler):
         if reference is None:
             base_offset = self.reference_pos
         elif type(reference) is str:
-            assert (
-                reference in placed_objects
-            ), "Invalid reference received. Current options are: {}, requested: {}".format(
-                placed_objects.keys(), reference
+            assert reference in placed_objects, (
+                "Invalid reference received. Current options are: {}, requested: {}".format(
+                    placed_objects.keys(), reference
+                )
             )
             ref_pos, _, ref_obj = placed_objects[reference]
             base_offset = np.array(ref_pos)
@@ -214,10 +214,10 @@ class UniformRandomSampler(ObjectPositionSampler):
                 base_offset += np.array((0, 0, ref_obj.top_offset[-1]))
         else:
             base_offset = np.array(reference)
-            assert (
-                base_offset.shape[0] == 3
-            ), "Invalid reference received. Should be (x,y,z) 3-tuple, but got: {}".format(
-                base_offset
+            assert base_offset.shape[0] == 3, (
+                "Invalid reference received. Should be (x,y,z) 3-tuple, but got: {}".format(
+                    base_offset
+                )
             )
 
         # Sample pos and quat for all objects assigned to this sampler

@@ -25,7 +25,7 @@ class ClutterEnv(DatasetRenderEnv):
         *args,
         # Asset specification
         asset_df: pd.DataFrame = None,
-        **kwargs
+        **kwargs,
     ):
         self.asset_df = asset_df
         self.asset_ids = []

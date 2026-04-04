@@ -24,7 +24,7 @@ class SingleObjectRenderEnv(DatasetRenderEnv):
         mob_id: Optional[str] = None,
         object_scale: float = 0.8,
         object_position: Optional[np.ndarray] = None,
-        **kwargs
+        **kwargs,
     ):
         self.mob_id = mob_id
         self.object_scale = object_scale

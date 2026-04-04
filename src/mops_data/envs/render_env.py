@@ -26,7 +26,7 @@ class RenderEnv(BaseEnv):
         obj_id=None,
         obj_index=None,
         np_rng: np.random.Generator = None,
-        **kwargs
+        **kwargs,
     ):
         self.robot_init_qpos_noise = robot_init_qpos_noise
 

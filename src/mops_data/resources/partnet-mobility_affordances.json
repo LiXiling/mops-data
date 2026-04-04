@@ -55345,7 +55345,7 @@
         ],
         "affordances": [
             "grasp",
-            "turn"
+            "rotate"
         ],
         "dir_name": 1011,
         "is_large_object": false
@@ -280089,7 +280089,7 @@
         ],
         "affordances": [
             "grasp",
-            "turn"
+            "rotate"
         ],
         "dir_name": 1370,
         "is_large_object": false
@@ -280594,7 +280594,7 @@
         ],
         "affordances": [
             "grasp",
-            "turn"
+            "rotate"
         ],
         "dir_name": 1401,
         "is_large_object": false
@@ -280790,7 +280790,7 @@
         ],
         "affordances": [
             "grasp",
-            "turn"
+            "rotate"
         ],
         "dir_name": 1427,
         "is_large_object": false
@@ -288194,7 +288194,7 @@
         ],
         "affordances": [
             "grasp",
-            "turn"
+            "rotate"
         ],
         "dir_name": 1903,
         "is_large_object": false
@@ -288607,7 +288607,7 @@
         ],
         "affordances": [
             "grasp",
-            "turn"
+            "rotate"
         ],
         "dir_name": 1925,
         "is_large_object": false
@@ -375886,7 +375886,7 @@
             0.2265453365
         ],
         "affordances": [
-            "listen"
+            "move"
         ],
         "dir_name": 6843,
         "is_large_object": true
@@ -375913,7 +375913,7 @@
             0.2265453365
         ],
         "affordances": [
-            "listen"
+            "move"
         ],
         "dir_name": 6843,
         "is_large_object": true
@@ -376053,7 +376053,7 @@
         ],
         "affordances": [
             "grasp",
-            "turn"
+            "rotate"
         ],
         "dir_name": 693,
         "is_large_object": false
@@ -385672,9 +385672,7 @@
             1.2135977647
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8867,
         "is_large_object": true
@@ -385759,9 +385757,7 @@
             1.2452266312
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8877,
         "is_large_object": true
@@ -385846,9 +385842,7 @@
             1.1892339156
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8893,
         "is_large_object": true
@@ -385933,9 +385927,7 @@
             1.2130807695
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8897,
         "is_large_object": true
@@ -386020,9 +386012,7 @@
             1.1721219865
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8903,
         "is_large_object": true
@@ -386107,9 +386097,7 @@
             1.2913645904
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8919,
         "is_large_object": true
@@ -386194,9 +386182,7 @@
             1.3941688397
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8930,
         "is_large_object": true
@@ -386397,9 +386383,7 @@
             1.153811777
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8936,
         "is_large_object": true
@@ -386426,9 +386410,7 @@
             1.267784698
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8961,
         "is_large_object": true
@@ -386513,9 +386495,7 @@
             1.1727938261
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8966,
         "is_large_object": true
@@ -386600,9 +386580,7 @@
             1.2167083185
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8983,
         "is_large_object": true
@@ -386658,9 +386636,7 @@
             1.1996755807
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8994,
         "is_large_object": true
@@ -386803,9 +386779,7 @@
             1.4147437554
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 8997,
         "is_large_object": true
@@ -386832,9 +386806,7 @@
             1.2029120637
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9003,
         "is_large_object": true
@@ -386919,9 +386891,7 @@
             1.4612471092
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9016,
         "is_large_object": true
@@ -387006,9 +386976,7 @@
             1.2341108232
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9032,
         "is_large_object": true
@@ -387093,9 +387061,7 @@
             1.2998512799
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9035,
         "is_large_object": true
@@ -387180,9 +387146,7 @@
             1.2985500743
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9041,
         "is_large_object": true
@@ -387209,9 +387173,7 @@
             1.1830507157
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9065,
         "is_large_object": true
@@ -387325,9 +387287,7 @@
             1.5813410663
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9070,
         "is_large_object": true
@@ -387438,9 +387398,7 @@
             1.2901326656
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9107,
         "is_large_object": true
@@ -387496,9 +387454,7 @@
             1.3183393381
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9117,
         "is_large_object": true
@@ -387640,9 +387596,7 @@
             1.1705515606
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9127,
         "is_large_object": true
@@ -387727,9 +387681,7 @@
             1.208748616
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9128,
         "is_large_object": true
@@ -387814,9 +387766,7 @@
             1.1743502067
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9148,
         "is_large_object": true
@@ -387901,9 +387851,7 @@
             1.1362036077
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9164,
         "is_large_object": true
@@ -388046,9 +387994,7 @@
             1.2298113192
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9168,
         "is_large_object": true
@@ -388188,9 +388134,7 @@
             1.1440633586
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9263,
         "is_large_object": true
@@ -388275,9 +388219,7 @@
             1.2056656095
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9277,
         "is_large_object": true
@@ -388362,9 +388304,7 @@
             1.1376843796
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9280,
         "is_large_object": true
@@ -388449,9 +388389,7 @@
             1.1684966714
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9281,
         "is_large_object": true
@@ -388565,9 +388503,7 @@
             1.1233756542
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9288,
         "is_large_object": true
@@ -388766,9 +388702,7 @@
             1.3018398114
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9386,
         "is_large_object": true
@@ -388853,9 +388787,7 @@
             1.4298670358
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9388,
         "is_large_object": true
@@ -388882,9 +388814,7 @@
             1.2063067757
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9393,
         "is_large_object": true
@@ -388969,9 +388899,7 @@
             1.2861045162
         ],
         "affordances": [
-            "support",
-            "pushable",
-            "pull"
+            "support"
         ],
         "dir_name": 9410,
         "is_large_object": true

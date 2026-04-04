@@ -1,4 +1,3 @@
-
 from mani_skill.agents.registration import register_agent
 from mani_skill.agents.robots.panda import PandaWristCam
 

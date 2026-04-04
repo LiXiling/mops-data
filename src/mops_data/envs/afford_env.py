@@ -25,7 +25,7 @@ class AffordEnv(BaseEnv):
         robot_uids="panda",
         robot_init_qpos_noise=0.02,
         np_rng=None,
-        **kwargs
+        **kwargs,
     ):
         self.robot_init_qpos_noise = robot_init_qpos_noise
 
@@ -57,7 +57,6 @@ class AffordEnv(BaseEnv):
         rng: np.random.Generator = self.rng
 
         for i in range(rng.integers(9, 20)):
-
             rand_pos = np.asarray([0, 0.1, 0.1 + 0.1 * i]) + rng.uniform(-0.3, 0.3, 3)
             self.partnet_mobility_loader.load_random_object(rng, rand_pos)
 

@@ -44,6 +44,7 @@ def save_figs(obs, output_dir: str) -> None:
     plt.imsave(os.path.join(output_dir, "depth.png"), depth, cmap="viridis")
 
     if "segmentation" in cam:
+
         def _remap(tensor):
             """Remap arbitrary IDs to 0-N for colormap indexing."""
             out = tensor.clone()
@@ -57,7 +58,9 @@ def save_figs(obs, output_dir: str) -> None:
 
         # Class segmentation
         class_segm = _remap(cam["class_segmentation"].cpu()[0]).numpy().squeeze()
-        plt.imsave(os.path.join(output_dir, "class_segm.png"), class_segm, cmap="nipy_spectral")
+        plt.imsave(
+            os.path.join(output_dir, "class_segm.png"), class_segm, cmap="nipy_spectral"
+        )
 
         # Affordance segmentation (argmax over affordance channels)
         aff = cam["affordance_segmentation"].cpu()[0].argmax(dim=-1, keepdim=True)

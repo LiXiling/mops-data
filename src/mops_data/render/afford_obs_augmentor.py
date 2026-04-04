@@ -68,7 +68,11 @@ class AffordObsAugmentor:
         instance_segm = flat_segm.clone()
         class_segm = flat_segm.clone()
         is_partnet = torch.zeros_like(camera_segmentations)
-        afford_segm = torch.zeros_like(camera_segmentations).expand(-1, -1, -1, num_affords).clone()
+        afford_segm = (
+            torch.zeros_like(camera_segmentations)
+            .expand(-1, -1, -1, num_affords)
+            .clone()
+        )
 
         for obj_tensor_id in flat_segm.unique():
             obj_id = obj_tensor_id.item()

@@ -164,9 +164,7 @@ class KitchenDatasetPipeline(BaseDatasetPipeline):
                 if result["data"] is None:
                     continue
 
-                variation = jobs[result["job_id"]]["variations"][
-                    result["attempt_idx"]
-                ]
+                variation = jobs[result["job_id"]]["variations"][result["attempt_idx"]]
                 render_params = {
                     "split": split,
                     "variation": variation,

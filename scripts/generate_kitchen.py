@@ -28,7 +28,7 @@ FULL_CONFIG = KitchenDatasetConfig(
     image_size=(256, 256),
     light_temp_range=(2000, 10000),
     light_intensity_range=(0.6, 1.5),
-    obs_mode="rgb+segmentation"
+    obs_mode="rgb+segmentation",
 )
 
 DEBUG_CONFIG = KitchenDatasetConfig(
@@ -39,7 +39,7 @@ DEBUG_CONFIG = KitchenDatasetConfig(
     image_size=(640, 360),
     light_temp_range=(2000, 10000),
     light_intensity_range=(0.6, 1.5),
-    obs_mode="rgb+depth+segmentation+normal"
+    obs_mode="rgb+depth+segmentation+normal",
 )
 
 

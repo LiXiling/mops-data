@@ -40,7 +40,7 @@ def generate(dataset_config: ClutterDatasetConfig):
     end_time = time.time()
     print(f"End time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))}")
     elapsed = end_time - start_time
-    print(f"Total elapsed time: {elapsed:.2f} seconds ({elapsed/60:.2f} minutes)")
+    print(f"Total elapsed time: {elapsed:.2f} seconds ({elapsed / 60:.2f} minutes)")
 
 
 if __name__ == "__main__":
