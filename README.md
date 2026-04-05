@@ -66,7 +66,7 @@ python scripts/generate_single_object.py --debug
 python scripts/generate_single_object.py
 
 # Custom output path
-python scripts/generate_single_object.py --output data/mops_data/my_single_obj.h5
+python scripts/generate_single_object.py --output data/mops_data/my_single_obj
 ```
 
 ### Kitchen (Affordance) Dataset
@@ -89,7 +89,7 @@ python scripts/generate_clutter.py           # full generation
 
 ### Custom Configuration
 
-Each script accepts `--output <path>` to override the output file.  
+Each script accepts `--output <path>` to override the output directory.  
 For deeper customisation, edit the corresponding config class in `src/mops_data/generation/`:
 
 | Dataset        | Config class                  | Module                                           |
@@ -102,7 +102,7 @@ Key parameters shared by all configs (`BaseDatasetConfig`):
 
 | Parameter                    | Description                                          |
 | ---------------------------- | ---------------------------------------------------- |
-| `output_path`                | Path to the output `.h5` file                        |
+| `output_path`                | Path to the output dataset directory (Parquet)       |
 | `image_size`                 | `(width, height)` in pixels                         |
 | `target_train_images_per_set`| Training images per object/scene set                 |
 | `target_test_images_per_set` | Test images per object/scene set                     |

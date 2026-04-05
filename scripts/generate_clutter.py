@@ -12,7 +12,7 @@ python scripts/generate_clutter.py --debug
 python scripts/generate_clutter.py
 
 # Custom output path:
-python scripts/generate_clutter.py --output data/my_clutter.h5
+python scripts/generate_clutter.py --output data/my_clutter
 """
 
 import argparse
@@ -21,7 +21,7 @@ from mops_data.generation.clutter_dataset.clutter_config import ClutterDatasetCo
 from mops_data.generation.clutter_dataset.clutter_generation import generate
 
 FULL_CONFIG = ClutterDatasetConfig(
-    output_path="data/mops_data/mops_clutter_dataset.h5",
+    output_path="data/mops_data/mops_clutter_dataset",
     target_train_images_per_set=3000,
     target_test_images_per_set=1000,
     min_assets_per_class=5,
@@ -31,7 +31,7 @@ FULL_CONFIG = ClutterDatasetConfig(
 )
 
 DEBUG_CONFIG = ClutterDatasetConfig(
-    output_path="data/mops_data/debug_clutter.h5",
+    output_path="data/mops_data/debug_clutter",
     target_train_images_per_set=5,
     target_test_images_per_set=5,
     min_assets_per_class=5,
@@ -52,7 +52,7 @@ def main():
         "--output",
         type=str,
         default=None,
-        help="Override the output .h5 file path.",
+        help="Override the output directory path.",
     )
     args = parser.parse_args()
 

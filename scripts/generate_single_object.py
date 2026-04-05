@@ -12,7 +12,7 @@ python scripts/generate_single_object.py --debug
 python scripts/generate_single_object.py
 
 # Custom output path:
-python scripts/generate_single_object.py --output data/my_single_obj.h5
+python scripts/generate_single_object.py --output data/my_single_obj
 """
 
 import argparse
@@ -23,7 +23,7 @@ from mops_data.generation.single_object_dataset.single_obj_config import (
 from mops_data.generation.single_object_dataset.single_object_generation import generate
 
 FULL_CONFIG = SingleObjectDatasetConfig(
-    output_path="data/mops_data/mops_single_object_dataset.h5",
+    output_path="data/mops_data/mops_single_object_dataset",
     target_train_images_per_set=40,
     target_test_images_per_set=20,
     min_assets_per_class=10,
@@ -33,7 +33,7 @@ FULL_CONFIG = SingleObjectDatasetConfig(
 )
 
 DEBUG_CONFIG = SingleObjectDatasetConfig(
-    output_path="data/mops_data/debug_single_object.h5",
+    output_path="data/mops_data/debug_single_object",
     target_train_images_per_set=5,
     target_test_images_per_set=5,
     min_assets_per_class=100,
@@ -56,7 +56,7 @@ def main():
         "--output",
         type=str,
         default=None,
-        help="Override the output .h5 file path.",
+        help="Override the output directory path.",
     )
     args = parser.parse_args()
 

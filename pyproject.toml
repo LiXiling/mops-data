@@ -13,6 +13,7 @@ authors = [
 readme = "README.md"
 
 dependencies = [
+    "datasets>=4.8.4",
     "mani-skill>=3.0.0b22",
     "pandas",
     "scikit-learn>=1.7.2",

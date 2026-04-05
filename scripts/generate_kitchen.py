@@ -12,7 +12,7 @@ python scripts/generate_kitchen.py --debug
 python scripts/generate_kitchen.py
 
 # Custom output path:
-python scripts/generate_kitchen.py --output data/my_kitchen.h5
+python scripts/generate_kitchen.py --output data/my_kitchen
 """
 
 import argparse
@@ -21,22 +21,22 @@ from mops_data.generation.kitchen_dataset.kitchen_config import KitchenDatasetCo
 from mops_data.generation.kitchen_dataset.kitchen_generation import generate
 
 FULL_CONFIG = KitchenDatasetConfig(
-    output_path="data/mops_data/mops_kitchen_dataset_100k_v2.h5",
+    output_path="data/mops_data/mops_kitchen_dataset_100k",
     target_train_images_per_set=90000,
     target_test_images_per_set=10000,
     min_assets_per_class=5,
-    image_size=(256, 256),
+    image_size=(640, 480),
     light_temp_range=(2000, 10000),
     light_intensity_range=(0.6, 1.5),
     obs_mode="rgb+segmentation",
 )
 
 DEBUG_CONFIG = KitchenDatasetConfig(
-    output_path="data/mops_data/debug_kitchen.h5",
+    output_path="data/mops_data/debug_kitchen",
     target_train_images_per_set=2,
     target_test_images_per_set=2,
     min_assets_per_class=5,
-    image_size=(640, 360),
+    image_size=(640, 480),
     light_temp_range=(2000, 10000),
     light_intensity_range=(0.6, 1.5),
     obs_mode="rgb+depth+segmentation+normal",
@@ -54,7 +54,7 @@ def main():
         "--output",
         type=str,
         default=None,
-        help="Override the output .h5 file path.",
+        help="Override the output directory path.",
     )
     args = parser.parse_args()
 

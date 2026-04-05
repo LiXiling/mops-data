@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from mops_data.generation.base_pipeline import BaseDatasetPipeline
-from mops_data.generation.hdf_writer import HDF5Writer
+from mops_data.generation.parquet_writer import ParquetWriter
 from mops_data.generation.subprocess_renderer import (
     SPLIT_SEED_OFFSETS,
     render_batch_parallel,
@@ -110,7 +110,7 @@ class BalancedSingleObjectDatasetPipeline(BaseDatasetPipeline):
 
     def _generate_images_for_class_split(
         self,
-        writer: HDF5Writer,
+        writer: ParquetWriter,
         assets: List[Dict],
         target_count: int,
         split: str,
@@ -182,7 +182,7 @@ class BalancedSingleObjectDatasetPipeline(BaseDatasetPipeline):
         pbar.close()
 
     def create_dataset(self):
-        """Create the balanced dataset by rendering assets and writing to HDF5."""
+        """Create the balanced dataset by rendering assets and writing to Parquet."""
         total_images = sum(
             plan["target_train"] + plan["target_test"] for plan in self.plan.values()
         )
@@ -190,10 +190,9 @@ class BalancedSingleObjectDatasetPipeline(BaseDatasetPipeline):
         print(f"Estimated total images: {total_images}")
 
         try:
-            with HDF5Writer(
+            with ParquetWriter(
                 self.config.output_path,
-                int(total_images * 1.1),  # Pre-allocate with 10% buffer
-                list(self.plan.keys()),
+                class_names=list(self.plan.keys()),
             ) as writer:
                 for class_name, plan in tqdm(
                     self.plan.items(), desc="Total Progress", unit="class"

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MOPS-Data is a dataset generation framework for creating photoreal synthetic datasets for computer vision tasks in robotic manipulation. It renders PartNet-Mobility objects in ManiSkill3/SAPIEN simulations and outputs HDF5 datasets with multi-modal observations (RGB, depth, segmentation masks, surface normals).
+MOPS-Data is a dataset generation framework for creating photoreal synthetic datasets for computer vision tasks in robotic manipulation. It renders PartNet-Mobility objects in ManiSkill3/SAPIEN simulations and outputs Hugging Face Parquet datasets with multi-modal observations (RGB, depth, segmentation masks, surface normals).
 
 **Requires Python 3.10** (ManiSkill3 constraint).
 
@@ -40,12 +40,13 @@ pre-commit run --all-files
 ## Architecture
 
 ### Generation Pipeline
-Each dataset type follows the same pattern: `Config dataclass` → `Pipeline` → `SubprocessRenderer` → `HDF5Writer`.
+Each dataset type follows the same pattern: `Config dataclass` → `Pipeline` → `SubprocessRenderer` → `ParquetWriter`.
 
 - **`src/mops_data/generation/base_config.py`**: `BaseDatasetConfig` dataclass with the asset blacklist (33 PartNet IDs known to cause crashes). Subclasses: `SingleObjectDatasetConfig`, `KitchenDatasetConfig`, `ClutterDatasetConfig`.
 - **`src/mops_data/generation/base_pipeline.py`**: Abstract `BaseDatasetPipeline` — filters assets, generates viewpoint×lighting variation plans.
 - **`src/mops_data/generation/subprocess_renderer.py`**: Spawns fresh subprocesses per render batch to force GPU memory cleanup via OS (prevents OptiX/CUDA OOM accumulation). Key functions: `render_in_subprocess()`, `render_batch_parallel()`.
-- **`src/mops_data/generation/hdf_writer.py`**: `HDF5Writer` context manager. Writes images and all mask types (semantic, instance, part, affordance, depth, normal, bbox) into a structured HDF5 file.
+- **`src/mops_data/generation/parquet_writer.py`**: `ParquetWriter` context manager. Writes images and all mask types into sharded Parquet files (Hugging Face `datasets` format). RGB stored as `Image()`; all other arrays as lossless `.npy` bytes.
+- **`src/mops_data/generation/hdf_writer.py`**: `HDF5Writer` context manager (legacy). Writes into a single HDF5 file with gzip compression.
 - **`src/mops_data/generation/variation_utils.py`**: Generates the Cartesian product of viewpoints × lighting conditions, then samples with stochastic jitter (±10° azimuth, ±5° elevation).
 
 ### Simulation Environments (ManiSkill3 / Gymnasium)
@@ -71,24 +72,32 @@ Base class `DatasetRenderEnv` (`base_rendering_env.py`) handles Kelvin→RGB con
 - `data/mops_data/` → `/mnt/data/mops-data`
 - `data/robocasa_dataset/` → `~/.maniskill/data/scene_datasets/robocasa_dataset`
 
-### HDF5 Output Structure
+### Parquet Output Structure
 ```
-.h5
-├── images/           # RGB (gzip-6)
-├── masks/
-│   ├── semantic/     # Per-class segmentation
-│   ├── instance/
-│   ├── part/
-│   ├── affordance/
-│   ├── depth/
-│   ├── normal/
-│   ├── is_partnet/
-│   └── bbox/         # [x, y, w, h, class_id]
-├── labels/
-│   ├── class_names
-│   └── class_labels
-└── metadata/
-    ├── splits        # Train/test binary flags
-    ├── image_info    # Per-image JSON metadata
-    └── attrs: {total_images, creation_date, version, num_classes}
+dataset_dir/
+├── train/
+│   ├── 00000.parquet
+│   └── ...
+├── test/
+│   ├── 00000.parquet
+│   └── ...
+└── dataset_info.json
+
+Each Parquet row:
+  image_id      (string)   — e.g. "image_000042"
+  image         (Image)    — RGB, PNG-encoded (datasets.Image feature)
+  asset_id      (string)
+  render_params (string)   — JSON
+  class_name    (string)   — present when class_names provided
+  class_idx     (int32)    — present when class_names provided
+  semantic      (binary)   — npy bytes, np.load(io.BytesIO(val))
+  instance      (binary)
+  part          (binary)
+  affordance    (binary)
+  depth         (binary)
+  normal        (binary)
+  is_partnet    (binary)
+  bbox          (string)   — JSON, [x, y, w, h, class_id]
 ```
+
+Load with: `datasets.load_dataset("parquet", data_dir="dataset_dir")`

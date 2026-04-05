@@ -209,7 +209,7 @@ class DatasetRenderEnv(BaseEnv, abc.ABC):
 
     def build_render_data(self, obs: Dict) -> Dict[str, np.ndarray]:
         """
-        Extract render data from observations for HDF5Writer.
+        Extract render data from observations for the dataset writer.
         """
         camera_obs = obs["sensor_data"]["base_camera"]
         key_map = {
