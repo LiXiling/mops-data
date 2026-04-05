@@ -143,11 +143,6 @@ This project builds on [ManiSkill3](https://github.com/haosulab/ManiSkill), so m
 | **`mops_data.render`**          | Observation augmentation and shader configuration         |
 | **`xr_teleop`**                 | WebXR-based VR teleoperation controller. Experimental     |
 
-### 🥽 VR Integration
-The `xr_teleop` module provides rudimentary VR teleoperation through WebXR. Serve the webpage and access it with a VR headset to send control commands.
-
-> 🔜 **Coming Soon**: [IRIS](https://intuitive-robots.github.io/iris-project-page/) support!
-
 ## 📊 Features
 
 - 🎨 **Photoreal Simulation**: High-quality visual rendering for computer vision

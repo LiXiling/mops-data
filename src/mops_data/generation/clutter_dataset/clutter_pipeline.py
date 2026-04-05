@@ -9,11 +9,18 @@ from mops_data.generation.base_pipeline import BaseDatasetPipeline
 from mops_data.generation.hdf_writer import HDF5Writer
 from mops_data.generation.subprocess_renderer import (
     SPLIT_SEED_OFFSETS,
-    render_in_subprocess,
+    render_batch_parallel,
 )
 
 ENV_ID = "ClutterRenderEnv-v1"
 ENV_MODULE = "mops_data.envs.dataset_envs"
+
+BATCH_SIZE = 500
+NUM_WORKERS = 1
+# How many viewpoints to render from each scene before rebuilding it.
+# Scene rebuild (gym.make) is expensive (SAPIEN init + URDF loads);
+# amortise that cost by rendering multiple camera angles per scene.
+N_VIEWPOINTS_PER_SCENE = 4
 
 
 class ClutterDatasetPipeline(BaseDatasetPipeline):
@@ -62,16 +69,37 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
             if v is not None
         }
 
-    def _render_with_retry(
+    def _prepare_render_job(
         self,
-        asset_df: pd.DataFrame,
-        variations: list,
-        image_seed: int,
-    ) -> tuple:
-        """Render in a subprocess, retrying with new variations on failure."""
+        assets: pd.DataFrame,
+        split: str,
+        attempt_index: int,
+    ) -> dict:
+        """Prepare a single render job with deterministic seeding.
+
+        Jobs are grouped into scenes: every N_VIEWPOINTS_PER_SCENE consecutive
+        jobs share the same asset selection (scene_key) so the subprocess worker
+        can reuse the same gym env across them.  Within a scene, each job uses a
+        different viewpoint variation so the renders are distinct.
+        """
+        split_offset = SPLIT_SEED_OFFSETS[split]
+
+        # Scene-level seed: same for all viewpoints within one scene
+        scene_idx = attempt_index // N_VIEWPOINTS_PER_SCENE
+        scene_seed = self.config.random_seed + split_offset + scene_idx
+        scene_rng = np.random.RandomState(scene_seed)
+        random_set = assets.sample(40, random_state=scene_rng)
+
+        # Viewpoint-level seed: unique per job for camera/lighting variation
+        image_seed = self.config.random_seed + split_offset + attempt_index
+        np.random.seed(image_seed)
+        variations = self._sample_variations_for_asset(
+            self.config.max_resampling_attempts
+        )
+
         attempts = [
             {
-                "env_kwargs": self._build_env_kwargs(asset_df, var),
+                "env_kwargs": self._build_env_kwargs(random_set, var),
                 "seed": image_seed + attempt_idx,
                 "num_steps": 15,
                 "min_segments": self.config.min_segments_threshold,
@@ -79,10 +107,12 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
             for attempt_idx, var in enumerate(variations)
         ]
 
-        data, attempt_idx = render_in_subprocess(ENV_ID, ENV_MODULE, attempts)
-        if data is not None:
-            return data, variations[attempt_idx]
-        return None, None
+        return {
+            "job_id": attempt_index,
+            "scene_key": scene_idx,  # worker closes/recreates env when this changes
+            "attempts": attempts,
+            "variations": variations,
+        }
 
     def _generate_images_for_class_split(
         self,
@@ -93,46 +123,65 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
         class_name: str,
     ):
         """Generate and save images for a specific class and split."""
+        if target_count <= 0:
+            return
+
         pbar = tqdm(
-            total=target_count, desc=f"  {split.capitalize():<5} images", unit="img"
+            total=target_count,
+            desc=f"  {split.capitalize():<5} images",
+            unit="img",
+            dynamic_ncols=True,
         )
 
-        split_offset = SPLIT_SEED_OFFSETS[split]
         generated_count = 0
         attempt_index = 0
+        total_attempts = 0
 
         while generated_count < target_count:
-            image_seed = self.config.random_seed + split_offset + attempt_index
-            rng = np.random.RandomState(image_seed)
+            n_jobs = BATCH_SIZE * NUM_WORKERS
 
-            random_set = assets.sample(40, random_state=rng)
+            # Prepare a batch of render jobs with deterministic seeds
+            jobs = {}
+            for _ in range(n_jobs):
+                job = self._prepare_render_job(assets, split, attempt_index)
+                jobs[job["job_id"]] = job
+                attempt_index += 1
 
-            np.random.seed(image_seed)
-            variations = self._sample_variations_for_asset(
-                self.config.max_resampling_attempts
-            )
+            job_list = list(jobs.values())
+            batches = [
+                job_list[i : i + BATCH_SIZE]
+                for i in range(0, len(job_list), BATCH_SIZE)
+            ]
 
-            render_data, variation = self._render_with_retry(
-                random_set, variations, image_seed
-            )
-            attempt_index += 1
+            # render_batch_parallel is a generator: yields one result per render.
+            # This allows tqdm to update after every individual image rather than
+            # waiting for the entire batch to complete.
+            for result in render_batch_parallel(ENV_ID, ENV_MODULE, batches):
+                if generated_count >= target_count:
+                    break
 
-            if render_data is None:
-                continue
+                total_attempts += 1
+                if result["data"] is None:
+                    continue
 
-            render_params = {
-                "split": split,
-                "variation": variation,
-                "image_size": self.config.image_size,
-            }
+                variation = jobs[result["job_id"]]["variations"][result["attempt_idx"]]
+                render_params = {
+                    "split": split,
+                    "variation": variation,
+                    "image_size": self.config.image_size,
+                }
 
-            writer.add_image(
-                class_name=class_name,
-                render_params=render_params,
-                **render_data,
-            )
-            generated_count += 1
-            pbar.update(1)
+                writer.add_image(
+                    class_name=class_name,
+                    render_params=render_params,
+                    **result["data"],
+                )
+                generated_count += 1
+                pbar.update(1)
+                pbar.set_postfix(
+                    hit_rate=f"{generated_count / total_attempts:.0%}",
+                    refresh=False,
+                )
 
         pbar.close()
 
