@@ -28,7 +28,18 @@ FULL_CONFIG = KitchenDatasetConfig(
     image_size=(640, 480),
     light_temp_range=(2000, 10000),
     light_intensity_range=(0.6, 1.5),
-    obs_mode="rgb+segmentation",
+    obs_mode="rgb+segmentation+depth+normal",
+)
+
+FIVE_CONFIG = KitchenDatasetConfig(
+    output_path="data/mops_data/mops_kitchen_dataset_5k",
+    target_train_images_per_set=4000,
+    target_test_images_per_set=1000,
+    min_assets_per_class=5,
+    image_size=(640, 480),
+    light_temp_range=(2000, 10000),
+    light_intensity_range=(0.6, 1.5),
+    obs_mode="rgb+segmentation+depth+normal",
 )
 
 DEBUG_CONFIG = KitchenDatasetConfig(
@@ -51,6 +62,11 @@ def main():
         help="Run a small debug generation instead of the full dataset.",
     )
     parser.add_argument(
+        "--five",
+        action="store_true",
+        help="Run a small 5k generation instead of the full dataset.",
+    )
+    parser.add_argument(
         "--output",
         type=str,
         default=None,
@@ -58,7 +74,7 @@ def main():
     )
     args = parser.parse_args()
 
-    config = DEBUG_CONFIG if args.debug else FULL_CONFIG
+    config = DEBUG_CONFIG if args.debug else FIVE_CONFIG if args.five else FULL_CONFIG
     if args.output:
         config.output_path = args.output
 

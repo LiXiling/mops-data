@@ -21,13 +21,14 @@ from mops_data.generation.clutter_dataset.clutter_config import ClutterDatasetCo
 from mops_data.generation.clutter_dataset.clutter_generation import generate
 
 FULL_CONFIG = ClutterDatasetConfig(
-    output_path="data/mops_data/mops_clutter_dataset",
-    target_train_images_per_set=3000,
+    output_path="data/mops_data/mops_clutter_dataset_5k",
+    target_train_images_per_set=4000,
     target_test_images_per_set=1000,
     min_assets_per_class=5,
-    image_size=(512, 512),
+    image_size=(640, 480),
     light_temp_range=(2000, 10000),
     light_intensity_range=(0.6, 1.5),
+    obs_mode="rgb+segmentation+depth+normal",
 )
 
 DEBUG_CONFIG = ClutterDatasetConfig(
@@ -38,6 +39,7 @@ DEBUG_CONFIG = ClutterDatasetConfig(
     image_size=(128, 128),
     light_temp_range=(2000, 10000),
     light_intensity_range=(0.6, 1.5),
+    obs_mode="rgb+segmentation+depth+normal",
 )
 
 
