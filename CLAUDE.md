@@ -17,6 +17,9 @@ uv pip install -e ".[dev]"
 pre-commit install
 ```
 
+### Venv location
+`.venv`
+
 ### Dataset Generation
 ```bash
 # Debug mode (fast, small images, few samples)
