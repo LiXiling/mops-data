@@ -21,7 +21,7 @@ from mops_data.generation.kitchen_dataset.kitchen_config import KitchenDatasetCo
 from mops_data.generation.kitchen_dataset.kitchen_generation import generate
 
 FULL_CONFIG = KitchenDatasetConfig(
-    output_path="data/mops_data/mops_kitchen_dataset_100k",
+    output_path="data/mops_data/mops_kitchen_dataset_100k.h5",
     target_train_images_per_set=90000,
     target_test_images_per_set=10000,
     min_assets_per_class=5,
@@ -32,7 +32,7 @@ FULL_CONFIG = KitchenDatasetConfig(
 )
 
 FIVE_CONFIG = KitchenDatasetConfig(
-    output_path="data/mops_data/mops_kitchen_dataset_5k",
+    output_path="data/mops_data/mops_kitchen_dataset_5k.h5",
     target_train_images_per_set=4000,
     target_test_images_per_set=1000,
     min_assets_per_class=5,
@@ -43,7 +43,7 @@ FIVE_CONFIG = KitchenDatasetConfig(
 )
 
 DEBUG_CONFIG = KitchenDatasetConfig(
-    output_path="data/mops_data/debug_kitchen",
+    output_path="data/mops_data/debug_kitchen.h5",
     target_train_images_per_set=2,
     target_test_images_per_set=2,
     min_assets_per_class=5,

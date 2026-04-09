@@ -21,7 +21,7 @@ from mops_data.generation.clutter_dataset.clutter_config import ClutterDatasetCo
 from mops_data.generation.clutter_dataset.clutter_generation import generate
 
 FULL_CONFIG = ClutterDatasetConfig(
-    output_path="data/mops_data/mops_clutter_dataset_5k",
+    output_path="data/mops_data/mops_clutter_dataset_5k.h5",
     target_train_images_per_set=4000,
     target_test_images_per_set=1000,
     min_assets_per_class=5,
@@ -32,7 +32,7 @@ FULL_CONFIG = ClutterDatasetConfig(
 )
 
 DEBUG_CONFIG = ClutterDatasetConfig(
-    output_path="data/mops_data/debug_clutter",
+    output_path="data/mops_data/debug_clutter.h5",
     target_train_images_per_set=5,
     target_test_images_per_set=5,
     min_assets_per_class=5,

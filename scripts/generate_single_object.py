@@ -23,7 +23,7 @@ from mops_data.generation.single_object_dataset.single_obj_config import (
 from mops_data.generation.single_object_dataset.single_object_generation import generate
 
 FULL_CONFIG = SingleObjectDatasetConfig(
-    output_path="data/mops_data/mops_single_object_dataset",
+    output_path="data/mops_data/mops_single_object_dataset.h5",
     target_train_images_per_set=40,
     target_test_images_per_set=20,
     min_assets_per_class=10,
@@ -33,7 +33,7 @@ FULL_CONFIG = SingleObjectDatasetConfig(
 )
 
 DEBUG_CONFIG = SingleObjectDatasetConfig(
-    output_path="data/mops_data/debug_single_object",
+    output_path="data/mops_data/debug_single_object.h5",
     target_train_images_per_set=5,
     target_test_images_per_set=5,
     min_assets_per_class=100,
