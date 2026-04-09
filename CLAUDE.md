@@ -30,11 +30,9 @@ python scripts/generate_kitchen.py
 python scripts/generate_clutter.py
 ```
 
-### Linting
+### Formatting
 ```bash
-ruff check .
 ruff format .
-pre-commit run --all-files
 ```
 
 ## Architecture

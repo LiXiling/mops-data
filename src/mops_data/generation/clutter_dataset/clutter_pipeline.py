@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from mops_data.generation.base_pipeline import BaseDatasetPipeline
-from mops_data.generation.parquet_writer import ParquetWriter
+from mops_data.generation.imagefolder_writer import ImageFolderWriter
 from mops_data.generation.subprocess_renderer import (
     SPLIT_SEED_OFFSETS,
     render_batch_parallel,
@@ -116,7 +116,7 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
 
     def _generate_images_for_class_split(
         self,
-        writer: ParquetWriter,
+        writer: ImageFolderWriter,
         assets: pd.DataFrame,
         target_count: int,
         split: str,
@@ -196,7 +196,7 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
         print(f"Estimated total images: {total_images}")
 
         try:
-            with ParquetWriter(
+            with ImageFolderWriter(
                 self.config.output_path,
             ) as writer:
                 print("\n=== STARTING TRAIN DATASET CREATION ===")
