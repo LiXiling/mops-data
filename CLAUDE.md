@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MOPS-Data is a dataset generation framework for creating photoreal synthetic datasets for computer vision tasks in robotic manipulation. It renders PartNet-Mobility objects in ManiSkill3/SAPIEN simulations and outputs Hugging Face Parquet datasets with multi-modal observations (RGB, depth, segmentation masks, surface normals).
+MOPS-Data is a dataset generation framework for creating photoreal synthetic datasets for computer vision tasks in robotic manipulation. It renders PartNet-Mobility objects in ManiSkill3/SAPIEN simulations and outputs datasets with multi-modal observations (RGB, depth, segmentation masks, surface normals). Default output format is WebDataset (sharded TARs) for Hugging Face Hub publishing; HDF5 is available via `--format hdf5`.
 
 **Requires Python 3.10** (ManiSkill3 constraint).
 
@@ -41,12 +41,12 @@ ruff format .
 ## Architecture
 
 ### Generation Pipeline
-Each dataset type follows the same pattern: `Config dataclass` → `Pipeline` → `SubprocessRenderer` → `ParquetWriter`.
+Each dataset type follows the same pattern: `Config dataclass` → `Pipeline` → `SubprocessRenderer` → `Writer`. The writer is selected by `BaseDatasetConfig.output_format` (`OutputFormat.WEBDATASET` default, `OutputFormat.HDF5` for legacy). The `_open_writer()` context manager on `BaseDatasetPipeline` handles the dispatch.
 
-- **`src/mops_data/generation/base_config.py`**: `BaseDatasetConfig` dataclass with the asset blacklist (33 PartNet IDs known to cause crashes). Subclasses: `SingleObjectDatasetConfig`, `KitchenDatasetConfig`, `ClutterDatasetConfig`.
-- **`src/mops_data/generation/base_pipeline.py`**: Abstract `BaseDatasetPipeline` — filters assets, generates viewpoint×lighting variation plans.
+- **`src/mops_data/generation/base_config.py`**: `BaseDatasetConfig` dataclass with the asset blacklist (33 PartNet IDs known to cause crashes) and `output_format` field. Subclasses: `SingleObjectDatasetConfig`, `KitchenDatasetConfig`, `ClutterDatasetConfig`.
+- **`src/mops_data/generation/base_pipeline.py`**: Abstract `BaseDatasetPipeline` — filters assets, generates viewpoint×lighting variation plans, provides `_open_writer()` factory.
 - **`src/mops_data/generation/subprocess_renderer.py`**: Spawns fresh subprocesses per render batch to force GPU memory cleanup via OS (prevents OptiX/CUDA OOM accumulation). Key functions: `render_in_subprocess()`, `render_batch_parallel()`.
-- **`src/mops_data/generation/parquet_writer.py`**: `ParquetWriter` context manager. Writes images and all mask types into sharded Parquet files (Hugging Face `datasets` format). RGB stored as `Image()`; all other arrays as lossless `.npy` bytes.
+- **`src/mops_data/generation/webdataset_writer.py`**: `WebDatasetWriter` context manager (default). Writes sharded TAR archives in WebDataset format for HF Hub. Integer masks as lossless PNG; multi-channel/float arrays as compressed `.npz`.
 - **`src/mops_data/generation/hdf_writer.py`**: `HDF5Writer` context manager (legacy). Writes into a single HDF5 file with gzip compression.
 - **`src/mops_data/generation/variation_utils.py`**: Generates the Cartesian product of viewpoints × lighting conditions, then samples with stochastic jitter (±10° azimuth, ±5° elevation).
 
@@ -73,32 +73,35 @@ Base class `DatasetRenderEnv` (`base_rendering_env.py`) handles Kelvin→RGB con
 - `data/mops_data/` → `/mnt/data/mops-data`
 - `data/robocasa_dataset/` → `~/.maniskill/data/scene_datasets/robocasa_dataset`
 
-### Parquet Output Structure
+### WebDataset Output Structure (default)
 ```
 dataset_dir/
 ├── train/
-│   ├── 00000.parquet
+│   ├── 00000.tar
 │   └── ...
 ├── test/
-│   ├── 00000.parquet
+│   ├── 00000.tar
 │   └── ...
 └── dataset_info.json
 
-Each Parquet row:
-  image_id      (string)   — e.g. "image_000042"
-  image         (Image)    — RGB, PNG-encoded (datasets.Image feature)
-  asset_id      (string)
-  render_params (string)   — JSON
-  class_name    (string)   — present when class_names provided
-  class_idx     (int32)    — present when class_names provided
-  semantic      (binary)   — npy bytes, np.load(io.BytesIO(val))
-  instance      (binary)
-  part          (binary)
-  affordance    (binary)
-  depth         (binary)
-  normal        (binary)
-  is_partnet    (binary)
-  bbox          (string)   — JSON, [x, y, w, h, class_id]
+Each sample in a TAR shard (files sharing a key prefix):
+  {id}.png               — RGB image (PNG)
+  {id}.semantic.png      — semantic mask, lossless grayscale PNG (~40 classes)
+  {id}.instance.png      — instance mask, grayscale PNG (uint8 or uint16)
+  {id}.part.png          — part mask, grayscale PNG (uint8 or uint16)
+  {id}.is_partnet.png    — binary mask, grayscale PNG
+  {id}.affordance.npz    — (H,W,56) int multi-hot, compressed numpy
+  {id}.depth.npz         — (H,W,1) float32, compressed numpy
+  {id}.normal.npz        — (H,W,3) float32, compressed numpy
+  {id}.bbox.json         — bounding boxes [x, y, w, h, class_id]
+  {id}.json              — metadata (image_id, asset_id, render_params, class)
 ```
 
-Load with: `datasets.load_dataset("parquet", data_dir="dataset_dir")`
+Load with: `datasets.load_dataset("webdataset", data_dir="dataset_dir")`
+Decode arrays: `np.load(io.BytesIO(row["depth.npz"]))["data"]`
+
+### Observation Data Characteristics
+- **Affordance** masks are extremely sparse: shape `(H,W,56)` multi-hot int, but 99%+ of values are zero (most pixels are background, and objects only have ~5-10 active affordances out of 56). The WebDataset writer uses `.npz` (numpy deflate) which achieves ~100x compression on these sparse arrays.
+- **Depth** is `(H,W,1)` float32 with smooth gradients — compresses ~2-3x with deflate.
+- **Normal** is `(H,W,3)` float32 with high spatial frequency — compresses poorly (~20%).
+- **Integer masks** (semantic, instance, part, is_partnet) are single-channel with low cardinality — PNG achieves excellent lossless compression.

@@ -1,5 +1,13 @@
 from dataclasses import dataclass
+from enum import Enum
 from typing import Dict, List, Tuple
+
+
+class OutputFormat(Enum):
+    """Supported dataset output formats."""
+
+    HDF5 = "hdf5"
+    WEBDATASET = "webdataset"
 
 
 @dataclass(kw_only=True)
@@ -13,6 +21,7 @@ class BaseDatasetConfig:
 
     output_path: str
     dataset_name: str = "mops_dataset"
+    output_format: OutputFormat = OutputFormat.WEBDATASET
 
     # Dataset distribution
     target_train_images_per_set: int = 40

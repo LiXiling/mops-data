@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
@@ -6,7 +6,6 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 from mops_data.generation.base_pipeline import BaseDatasetPipeline
-from mops_data.generation.hdf_writer import HDF5Writer
 from mops_data.generation.subprocess_renderer import (
     SPLIT_SEED_OFFSETS,
     render_batch_parallel,
@@ -116,7 +115,7 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
 
     def _generate_images_for_class_split(
         self,
-        writer: HDF5Writer,
+        writer: Any,
         assets: pd.DataFrame,
         target_count: int,
         split: str,
@@ -186,7 +185,7 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
         pbar.close()
 
     def create_dataset(self):
-        """Create the balanced dataset by rendering assets and writing to HDF5."""
+        """Create the balanced dataset by rendering assets and writing output."""
         total_images = (
             self.config.target_train_images_per_set
             + self.config.target_test_images_per_set
@@ -196,8 +195,7 @@ class ClutterDatasetPipeline(BaseDatasetPipeline):
         print(f"Estimated total images: {total_images}")
 
         try:
-            with HDF5Writer(
-                self.config.output_path,
+            with self._open_writer(
                 max_images_estimate=total_images,
             ) as writer:
                 print("\n=== STARTING TRAIN DATASET CREATION ===")

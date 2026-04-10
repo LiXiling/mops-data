@@ -87,9 +87,23 @@ python scripts/generate_clutter.py --debug   # debug run
 python scripts/generate_clutter.py           # full generation
 ```
 
+### Output Format
+
+All scripts default to **WebDataset** (sharded TAR archives), which is the recommended format for publishing on [Hugging Face Hub](https://huggingface.co/docs/datasets/en/image_dataset#webdataset). To generate in legacy HDF5 format instead:
+
+```bash
+python scripts/generate_kitchen.py --debug --format hdf5
+```
+
+To convert an existing HDF5 dataset to WebDataset:
+
+```bash
+python scripts/convert_hdf5_to_webdataset.py data/mops_data/dataset.h5 [-o output_dir]
+```
+
 ### Custom Configuration
 
-Each script accepts `--output <path>` to override the output directory.  
+Each script accepts `--output <path>` to override the output directory and `--format <webdataset|hdf5>` to select the output format.  
 For deeper customisation, edit the corresponding config class in `src/mops_data/generation/`:
 
 | Dataset        | Config class                  | Module                                           |
@@ -102,7 +116,7 @@ Key parameters shared by all configs (`BaseDatasetConfig`):
 
 | Parameter                    | Description                                          |
 | ---------------------------- | ---------------------------------------------------- |
-| `output_path`                | Path to the output dataset directory (Parquet)       |
+| `output_path`                | Path to the output dataset directory                 |
 | `image_size`                 | `(width, height)` in pixels                         |
 | `target_train_images_per_set`| Training images per object/scene set                 |
 | `target_test_images_per_set` | Test images per object/scene set                     |

@@ -1,10 +1,11 @@
 import abc
-from typing import Dict, List
+from contextlib import contextmanager
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 
-from mops_data.generation.base_config import BaseDatasetConfig
+from mops_data.generation.base_config import BaseDatasetConfig, OutputFormat
 from mops_data.generation.variation_utils import (
     generate_base_variations,
     sample_variations_for_asset,
@@ -51,6 +52,41 @@ class BaseDatasetPipeline(abc.ABC):
         """Sample variations for a single asset."""
         return sample_variations_for_asset(self.config, n_images, self.base_variations)
 
+    @contextmanager
+    def _open_writer(
+        self,
+        max_images_estimate: int,
+        class_names: Optional[List[str]] = None,
+    ):
+        """Open the dataset writer configured by ``self.config.output_format``.
+
+        Yields a writer instance with the common ``add_image()`` interface.
+        """
+        fmt = self.config.output_format
+
+        if fmt == OutputFormat.HDF5:
+            from mops_data.generation.hdf_writer import HDF5Writer
+
+            with HDF5Writer(
+                self.config.output_path,
+                max_images_estimate=max_images_estimate,
+                class_names=class_names,
+            ) as writer:
+                yield writer
+
+        elif fmt == OutputFormat.WEBDATASET:
+            from mops_data.generation.webdataset_writer import WebDatasetWriter
+
+            with WebDatasetWriter(
+                self.config.output_path,
+                max_images_estimate=max_images_estimate,
+                class_names=class_names,
+            ) as writer:
+                yield writer
+
+        else:
+            raise ValueError(f"Unsupported output format: {fmt}")
+
     @abc.abstractmethod
     def _create_plan(self) -> Dict[str, Dict]:
         """Build a generation plan: map from scene/asset key → render spec.
@@ -61,5 +97,5 @@ class BaseDatasetPipeline(abc.ABC):
 
     @abc.abstractmethod
     def create_dataset(self) -> None:
-        """Execute the generation plan and write the HDF5 output file."""
+        """Execute the generation plan and write the dataset output."""
         pass
