@@ -22,7 +22,7 @@ class BaseDatasetConfig:
 
     output_path: str
     dataset_name: str = "mops_dataset"
-    output_format: OutputFormat = OutputFormat.PARQUET
+    output_format: OutputFormat = OutputFormat.WEBDATASET
 
     # Dataset distribution
     target_train_images_per_set: int = 40
