@@ -141,17 +141,29 @@ _FLOAT_ARRAY_STRUCT = pa.struct(
     ]
 )
 
+# HF `datasets.Image` on-disk layout: struct<bytes: binary, path: string>.
+# Matching this exactly (plus the schema metadata below) is what makes the
+# Hub dataset viewer render these columns as images instead of "unknown".
+_IMAGE_STRUCT = pa.struct(
+    [
+        pa.field("bytes", pa.binary()),
+        pa.field("path", pa.string()),
+    ]
+)
+
+_IMAGE_COLUMNS = ("image", "semantic", "instance", "part", "is_partnet")
+
 
 def _build_schema(has_classes: bool) -> pa.Schema:
     fields = [
         pa.field("image_id", pa.string()),
         pa.field("asset_id", pa.string()),
         pa.field("render_params", pa.string()),  # JSON-serialized
-        pa.field("image", pa.binary()),
-        pa.field("semantic", pa.binary()),
-        pa.field("instance", pa.binary()),
-        pa.field("part", pa.binary()),
-        pa.field("is_partnet", pa.binary()),
+        pa.field("image", _IMAGE_STRUCT),
+        pa.field("semantic", _IMAGE_STRUCT),
+        pa.field("instance", _IMAGE_STRUCT),
+        pa.field("part", _IMAGE_STRUCT),
+        pa.field("is_partnet", _IMAGE_STRUCT),
         pa.field("affordance", pa.list_(_RLE_STRUCT)),
         pa.field("depth", _FLOAT_ARRAY_STRUCT),
         pa.field("normal", _FLOAT_ARRAY_STRUCT),
@@ -162,7 +174,58 @@ def _build_schema(has_classes: bool) -> pa.Schema:
             pa.field("class_name", pa.string()),
             pa.field("class_idx", pa.int32()),
         ]
-    return pa.schema(fields)
+
+    features: dict[str, Any] = {
+        "image_id": {"dtype": "string", "_type": "Value"},
+        "asset_id": {"dtype": "string", "_type": "Value"},
+        "render_params": {"dtype": "string", "_type": "Value"},
+        "image": {"_type": "Image"},
+        "semantic": {"_type": "Image"},
+        "instance": {"_type": "Image"},
+        "part": {"_type": "Image"},
+        "is_partnet": {"_type": "Image"},
+        "affordance": {
+            "feature": {
+                "size": {
+                    "feature": {"dtype": "int32", "_type": "Value"},
+                    "_type": "Sequence",
+                },
+                "counts": {"dtype": "string", "_type": "Value"},
+            },
+            "_type": "Sequence",
+        },
+        "depth": {
+            "data": {"dtype": "binary", "_type": "Value"},
+            "shape": {
+                "feature": {"dtype": "int32", "_type": "Value"},
+                "_type": "Sequence",
+            },
+            "dtype": {"dtype": "string", "_type": "Value"},
+        },
+        "normal": {
+            "data": {"dtype": "binary", "_type": "Value"},
+            "shape": {
+                "feature": {"dtype": "int32", "_type": "Value"},
+                "_type": "Sequence",
+            },
+            "dtype": {"dtype": "string", "_type": "Value"},
+        },
+        "bbox": {
+            "feature": {
+                "feature": {"dtype": "float64", "_type": "Value"},
+                "_type": "Sequence",
+            },
+            "_type": "Sequence",
+        },
+    }
+    if has_classes:
+        features["class_name"] = {"dtype": "string", "_type": "Value"}
+        features["class_idx"] = {"dtype": "int32", "_type": "Value"}
+
+    metadata = {
+        b"huggingface": json.dumps({"info": {"features": features}}).encode("utf-8")
+    }
+    return pa.schema(fields, metadata=metadata)
 
 
 class ParquetWriter:
@@ -268,21 +331,24 @@ class ParquetWriter:
         depth = kwargs.get("depth")
         normal = kwargs.get("normal")
 
+        def _img(b: Optional[bytes]) -> Optional[dict]:
+            return None if b is None else {"bytes": b, "path": None}
+
         row: dict[str, Any] = {
             "image_id": f"image_{image_id}",
             "asset_id": asset_id,
             "render_params": json.dumps(kwargs["render_params"]),
-            "image": encode_rgb_png(kwargs["image"]),
-            "semantic": encode_mask_png(kwargs["semantic"])
+            "image": _img(encode_rgb_png(kwargs["image"])),
+            "semantic": _img(encode_mask_png(kwargs["semantic"]))
             if kwargs.get("semantic") is not None
             else None,
-            "instance": encode_mask_png(kwargs["instance"])
+            "instance": _img(encode_mask_png(kwargs["instance"]))
             if kwargs.get("instance") is not None
             else None,
-            "part": encode_mask_png(kwargs["part"])
+            "part": _img(encode_mask_png(kwargs["part"]))
             if kwargs.get("part") is not None
             else None,
-            "is_partnet": encode_mask_png(kwargs["is_partnet"])
+            "is_partnet": _img(encode_mask_png(kwargs["is_partnet"]))
             if kwargs.get("is_partnet") is not None
             else None,
             "affordance": affordance,
