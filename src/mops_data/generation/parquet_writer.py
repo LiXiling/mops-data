@@ -1,3 +1,59 @@
+"""Parquet (HF-native) writer for Hugging Face Hub publishing.
+
+Writes image datasets as sharded Parquet files.  Parquet is Hugging Face's
+native storage format and plays well with ``datasets.load_dataset("parquet",
+data_dir=...)`` without any of the webdataset/tar quirks (e.g. compressed
+``.npz`` payloads that HF's webdataset loader cannot decode).
+
+Per-column encoding (all lossless)::
+
+    image           -- PNG bytes (uint8 RGB)                       [Image feature]
+    semantic        -- PNG bytes (grayscale, uint8 or uint16)      [Image feature]
+    instance        -- PNG bytes (grayscale, uint8 or uint16)      [Image feature]
+    part            -- PNG bytes (grayscale, uint8 or uint16)      [Image feature]
+    is_partnet      -- PNG bytes (binary, uint8)                   [Image feature]
+    affordance      -- list[56] of COCO RLE dicts (binary multi-hot)
+    depth           -- struct{data: bytes, shape: list[int], dtype: str}
+                       (raw float32 little-endian bytes; parquet zstd
+                        compresses smooth depth well)
+    normal          -- struct{data: bytes, shape: list[int], dtype: str}
+                       (raw float32 little-endian bytes)
+    bbox            -- list[list[float]]  [[x, y, w, h, class_id], ...]
+    image_id        -- string
+    asset_id        -- string
+    render_params   -- JSON string (schema varies per pipeline)
+    class_name      -- string   (only if class_names supplied)
+    class_idx       -- int      (only if class_names supplied)
+
+Load with::
+
+    from datasets import load_dataset
+    ds = load_dataset("parquet", data_dir="dataset_dir")
+
+Decode float arrays with::
+
+    import numpy as np
+    cell = row["depth"]               # {"data": b"...", "shape": [...], "dtype": "float32"}
+    arr  = np.frombuffer(cell["data"], dtype=cell["dtype"]).reshape(cell["shape"])
+
+Decode affordance with::
+
+    from pycocotools import mask as coco_mask
+    rles = row["affordance"]          # list of 56 RLE dicts
+    channels = np.stack([coco_mask.decode(r) for r in rles], axis=-1)  # (H,W,56)
+
+Directory layout::
+
+    dataset_dir/
+    ├── train/
+    │   ├── 00000.parquet
+    │   └── ...
+    ├── test/
+    │   ├── 00000.parquet
+    │   └── ...
+    └── dataset_info.json
+"""
+
 import datetime
 import io
 import json
@@ -6,73 +62,135 @@ import threading
 from pathlib import Path
 from typing import Any, List, Optional
 
-import datasets
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 from PIL import Image
+from pycocotools import mask as coco_mask
+
+
+def encode_rgb_png(arr: np.ndarray) -> bytes:
+    buf = io.BytesIO()
+    Image.fromarray(arr).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def encode_mask_png(arr: np.ndarray) -> bytes:
+    mask = np.squeeze(arr)
+    buf = io.BytesIO()
+    if mask.max() <= 255:
+        Image.fromarray(mask.astype(np.uint8), mode="L").save(buf, format="PNG")
+    else:
+        Image.fromarray(mask.astype(np.uint16), mode="I;16").save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def encode_affordance_rle(arr: np.ndarray) -> list[dict]:
+    """Encode an (H,W,C) multi-hot binary array as a list of C COCO RLE dicts.
+
+    Each channel is encoded independently with ``pycocotools.mask.encode``.
+    The binary mask must be Fortran-order uint8 per pycocotools' contract.
+    The ``counts`` field is decoded back to a UTF-8 ``str`` so pyarrow can
+    store it in a string column (pycocotools returns raw bytes).
+    """
+    if arr.ndim != 3:
+        raise ValueError(f"affordance must be (H,W,C); got shape {arr.shape}")
+    rles = []
+    for c in range(arr.shape[2]):
+        channel = np.asfortranarray((arr[:, :, c] > 0).astype(np.uint8))
+        rle = coco_mask.encode(channel)
+        rles.append(
+            {
+                "size": list(rle["size"]),
+                "counts": rle["counts"].decode("ascii"),
+            }
+        )
+    return rles
+
+
+def encode_float_array(arr: np.ndarray) -> dict:
+    """Encode a float ndarray as a struct of raw little-endian bytes + shape.
+
+    Parquet zstd compression handles the redundancy; raw bytes preserve full
+    float32 precision losslessly.
+    """
+    arr = np.ascontiguousarray(arr)
+    return {
+        "data": arr.tobytes(),
+        "shape": list(arr.shape),
+        "dtype": str(arr.dtype),
+    }
+
+
+# ----------------------------------------------------------------------
+# Arrow schema
+# ----------------------------------------------------------------------
+
+_RLE_STRUCT = pa.struct(
+    [
+        pa.field("size", pa.list_(pa.int32())),
+        pa.field("counts", pa.string()),
+    ]
+)
+
+_FLOAT_ARRAY_STRUCT = pa.struct(
+    [
+        pa.field("data", pa.binary()),
+        pa.field("shape", pa.list_(pa.int32())),
+        pa.field("dtype", pa.string()),
+    ]
+)
+
+
+def _build_schema(has_classes: bool) -> pa.Schema:
+    fields = [
+        pa.field("image_id", pa.string()),
+        pa.field("asset_id", pa.string()),
+        pa.field("render_params", pa.string()),  # JSON-serialized
+        pa.field("image", pa.binary()),
+        pa.field("semantic", pa.binary()),
+        pa.field("instance", pa.binary()),
+        pa.field("part", pa.binary()),
+        pa.field("is_partnet", pa.binary()),
+        pa.field("affordance", pa.list_(_RLE_STRUCT)),
+        pa.field("depth", _FLOAT_ARRAY_STRUCT),
+        pa.field("normal", _FLOAT_ARRAY_STRUCT),
+        pa.field("bbox", pa.list_(pa.list_(pa.float64()))),
+    ]
+    if has_classes:
+        fields += [
+            pa.field("class_name", pa.string()),
+            pa.field("class_idx", pa.int32()),
+        ]
+    return pa.schema(fields)
 
 
 class ParquetWriter:
+    """Write image datasets as sharded Parquet files for HF Hub.
+
+    Drop-in replacement for WebDatasetWriter / HDF5Writer -- same
+    ``add_image()`` interface and context-manager pattern.
     """
-    Write image-based datasets to Hugging Face Parquet format.
-
-    Drop-in replacement for HDF5Writer — same add_image() interface and context
-    manager pattern.  Output is a directory of Parquet shards per split, loadable
-    with ``datasets.load_dataset("parquet", data_dir=...)``.
-
-    The RGB image is stored as a ``datasets.Image()`` feature (PNG encoded).
-    All other array columns (masks, depth, normals) are stored as raw ``.npy``
-    bytes (``Value("binary")``) to preserve original dtypes losslessly.
-    Decode any array column with::
-
-        np.load(io.BytesIO(row["depth"]))
-
-    Rows are written incrementally to Parquet via PyArrow's streaming writer,
-    so memory usage is bounded by ``row_group_size`` (not ``shard_size``).
-    """
-
-    # Mirrors HDF5Writer.DATA_SPEC keys.
-    DATA_SPEC = (
-        "semantic",
-        "instance",
-        "part",
-        "affordance",
-        "depth",
-        "normal",
-        "is_partnet",
-        "bbox",
-    )
-
-    # All array data stored as lossless npy bytes.
-    ARRAY_COLUMNS = {
-        "semantic",
-        "instance",
-        "part",
-        "affordance",
-        "depth",
-        "normal",
-        "is_partnet",
-    }
-    # JSON-serialised columns.
-    JSON_COLUMNS = {"bbox"}
 
     def __init__(
         self,
         output_dir: str,
         max_images_estimate: int = 10000,
         class_names: Optional[List[str]] = None,
-        shard_size: int = 1000,
-        row_group_size: int = 50,
+        shard_size: int = 100,
+        compression: str = "zstd",
+        row_group_size: int = 32,
     ):
         """
         Args:
-            output_dir: Directory where the Parquet dataset will be written.
-            max_images_estimate: Unused (kept for API compat with HDF5Writer).
-            class_names: Optional class names. Enables per-image class columns.
-            shard_size: Number of images per Parquet shard file.
-            row_group_size: Number of rows buffered before writing a row group
-                to the open shard file. Controls peak memory usage.
+            output_dir: Root directory for the Parquet output.
+            max_images_estimate: Unused (API compat with other writers).
+            class_names: Optional class names; enables per-image class columns.
+            shard_size: Number of samples per Parquet shard.
+            compression: Parquet compression codec (zstd recommended).
+            row_group_size: Rows per parquet row group. Kept small so a
+                single row group stays well under HF's 300 MB scan limit
+                for random access (depth+normal are ~2 MB/sample raw).
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -84,219 +202,136 @@ class ParquetWriter:
             {name: idx for idx, name in enumerate(class_names)} if class_names else {}
         )
         self.shard_size = shard_size
-        self._row_group_size = row_group_size
-
-        # PyArrow schema (built lazily, cached).
-        self._pa_schema: Optional[pa.Schema] = None
-
-        # Per-split state.
-        self._writers: dict[str, Optional[pq.ParquetWriter]] = {
-            "train": None,
-            "test": None,
-        }
-        self._row_buffers: dict[str, list[dict]] = {"train": [], "test": []}
-        self._shard_rows: dict[str, int] = {"train": 0, "test": 0}
-        self._shard_counts: dict[str, int] = {"train": 0, "test": 0}
-        self._split_totals: dict[str, int] = {"train": 0, "test": 0}
+        self.compression = compression
+        self.row_group_size = row_group_size
+        self.schema = _build_schema(self.has_classes)
 
         for split in ("train", "test"):
             (self.output_dir / split).mkdir(exist_ok=True)
 
-        # Background write thread (same pattern as HDF5Writer).
-        # maxsize caps queued raw samples to bound memory from the producer side.
-        self._write_queue: queue.Queue = queue.Queue(maxsize=32)
+        self._split_totals: dict[str, int] = {"train": 0, "test": 0}
+        self._shard_counts: dict[str, int] = {"train": 0, "test": 0}
+        self._buffers: dict[str, list[dict]] = {"train": [], "test": []}
+
+        self._write_queue: queue.Queue = queue.Queue(maxsize=200)
         self._write_thread = threading.Thread(
             target=self._write_worker, daemon=True, name="parquet-writer"
         )
         self._write_thread.start()
 
     # ------------------------------------------------------------------
-    # Features / schema
+    # Shard management
     # ------------------------------------------------------------------
 
-    def _build_features(self) -> datasets.Features:
-        """Build the HF Features schema (all DATA_SPEC columns included)."""
-        feat: dict[str, Any] = {
-            "image_id": datasets.Value("string"),
-            "image": datasets.Image(),
-            "asset_id": datasets.Value("string"),
-            "render_params": datasets.Value("string"),
-        }
-        if self.has_classes:
-            feat["class_name"] = datasets.Value("string")
-            feat["class_idx"] = datasets.Value("int32")
-
-        for name in self.DATA_SPEC:
-            if name in self.JSON_COLUMNS:
-                feat[name] = datasets.Value("string")
-            else:
-                feat[name] = datasets.Value("binary")
-
-        return datasets.Features(feat)
-
-    def _get_pa_schema(self) -> pa.Schema:
-        """Return the Arrow schema (with HF metadata), cached after first call."""
-        if self._pa_schema is None:
-            self._pa_schema = self._build_features().arrow_schema
-        return self._pa_schema
+    def _flush_shard(self, split: str):
+        buf = self._buffers[split]
+        if not buf:
+            return
+        shard_path = (
+            self.output_dir / split / f"{self._shard_counts[split]:05d}.parquet"
+        )
+        table = pa.Table.from_pylist(buf, schema=self.schema)
+        pq.write_table(
+            table,
+            str(shard_path),
+            compression=self.compression,
+            row_group_size=self.row_group_size,
+            write_page_index=True,
+        )
+        self._shard_counts[split] += 1
+        self._buffers[split] = []
 
     # ------------------------------------------------------------------
-    # Encoding helpers
+    # Row construction
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _encode_png(arr: np.ndarray) -> bytes:
-        """Encode an RGB uint8 array as PNG bytes."""
-        buf = io.BytesIO()
-        Image.fromarray(arr).save(buf, format="PNG")
-        return buf.getvalue()
-
-    @staticmethod
-    def _encode_npy(arr: np.ndarray) -> bytes:
-        """Encode a numpy array as .npy bytes (lossless)."""
-        buf = io.BytesIO()
-        np.save(buf, arr)
-        return buf.getvalue()
-
-    # ------------------------------------------------------------------
-    # Row encoding
-    # ------------------------------------------------------------------
-
-    def _encode_row(self, image_idx: int, kwargs: dict) -> tuple[str, dict]:
-        """Encode one sample into a row dict. Returns (split, row)."""
-        image_id = f"image_{image_idx:06d}"
+    def _build_row(self, image_idx: int, kwargs: dict) -> tuple[str, dict]:
+        image_id = f"{image_idx:06d}"
         split = kwargs["render_params"]["split"]
 
         asset_id = kwargs.get("asset_id", "")
-        if isinstance(asset_id, (list, np.ndarray)):
-            asset_id = json.dumps(
-                asset_id.tolist() if isinstance(asset_id, np.ndarray) else asset_id
-            )
+        if isinstance(asset_id, np.ndarray):
+            asset_id = asset_id.tolist()
+        if not isinstance(asset_id, str):
+            asset_id = json.dumps(asset_id)
+
+        bbox = kwargs.get("bbox")
+        if isinstance(bbox, np.ndarray):
+            bbox = bbox.tolist()
+        if bbox is None:
+            bbox = []
+
+        affordance = kwargs.get("affordance")
+        if affordance is not None:
+            affordance = encode_affordance_rle(affordance)
+
+        depth = kwargs.get("depth")
+        normal = kwargs.get("normal")
 
         row: dict[str, Any] = {
-            "image_id": image_id,
-            "image": {"bytes": self._encode_png(kwargs["image"]), "path": None},
+            "image_id": f"image_{image_id}",
             "asset_id": asset_id,
             "render_params": json.dumps(kwargs["render_params"]),
+            "image": encode_rgb_png(kwargs["image"]),
+            "semantic": encode_mask_png(kwargs["semantic"])
+            if kwargs.get("semantic") is not None
+            else None,
+            "instance": encode_mask_png(kwargs["instance"])
+            if kwargs.get("instance") is not None
+            else None,
+            "part": encode_mask_png(kwargs["part"])
+            if kwargs.get("part") is not None
+            else None,
+            "is_partnet": encode_mask_png(kwargs["is_partnet"])
+            if kwargs.get("is_partnet") is not None
+            else None,
+            "affordance": affordance,
+            "depth": encode_float_array(depth) if depth is not None else None,
+            "normal": encode_float_array(normal) if normal is not None else None,
+            "bbox": bbox,
         }
-
         if self.has_classes:
             row["class_name"] = kwargs["class_name"]
             row["class_idx"] = self.class_to_idx[kwargs["class_name"]]
-
-        for name in self.DATA_SPEC:
-            data = kwargs.get(name)
-            if data is None:
-                continue
-            if name in self.JSON_COLUMNS:
-                row[name] = json.dumps(
-                    data.tolist() if isinstance(data, np.ndarray) else data
-                )
-            else:
-                row[name] = self._encode_npy(data)
-
         return split, row
 
-    # ------------------------------------------------------------------
-    # Incremental Parquet writing
-    # ------------------------------------------------------------------
-
-    def _get_writer(self, split: str) -> pq.ParquetWriter:
-        """Return the open ParquetWriter for *split*, creating one if needed."""
-        if self._writers[split] is None:
-            shard_path = (
-                self.output_dir / split / f"{self._shard_counts[split]:05d}.parquet"
-            )
-            self._writers[split] = pq.ParquetWriter(
-                str(shard_path), self._get_pa_schema()
-            )
-        return self._writers[split]
-
-    def _flush_row_group(self, split: str):
-        """Write buffered rows as a single row group to the current shard."""
-        rows = self._row_buffers[split]
-        if not rows:
-            return
-
-        schema = self._get_pa_schema()
-
-        # Fill absent optional columns with None.
-        field_names = [f.name for f in schema]
-        for row in rows:
-            for name in field_names:
-                row.setdefault(name, None)
-
-        columns = {name: [row[name] for row in rows] for name in field_names}
-        table = pa.table(columns, schema=schema)
-
-        writer = self._get_writer(split)
-        writer.write_table(table)
-        self._row_buffers[split] = []
-
-    def _close_shard(self, split: str):
-        """Flush remaining rows and close the current shard file."""
-        self._flush_row_group(split)
-        if self._writers[split] is not None:
-            self._writers[split].close()
-            self._writers[split] = None
-            self._shard_counts[split] += 1
-            self._shard_rows[split] = 0
-
-    # ------------------------------------------------------------------
-    # Background write thread
-    # ------------------------------------------------------------------
-
     def _write_one(self, image_idx: int, kwargs: dict):
-        split, row = self._encode_row(image_idx, kwargs)
-        self._row_buffers[split].append(row)
-        self._shard_rows[split] += 1
+        split, row = self._build_row(image_idx, kwargs)
+        self._buffers[split].append(row)
         self._split_totals[split] += 1
 
-        if len(self._row_buffers[split]) >= self._row_group_size:
-            self._flush_row_group(split)
-
-        if self._shard_rows[split] >= self.shard_size:
-            self._close_shard(split)
+        if len(self._buffers[split]) >= self.shard_size:
+            self._flush_shard(split)
 
         self._images_flushed += 1
         if self._images_flushed % 100 == 0:
             print(f"Written {self._images_flushed} images...")
 
     def _write_worker(self):
-        """Background thread: drains the write queue and calls _write_one."""
         while True:
             item = self._write_queue.get()
-            if item is None:  # poison pill
+            if item is None:
                 self._write_queue.task_done()
                 break
             image_idx, kwargs = item
             try:
                 self._write_one(image_idx, kwargs)
             except Exception as e:
-                print(f"Parquet write error for image_{image_idx:06d}: {e}")
+                print(f"Write error for image_{image_idx:06d}: {e}")
             finally:
                 self._write_queue.task_done()
 
     # ------------------------------------------------------------------
-    # Public API (mirrors HDF5Writer)
+    # Public API (mirrors WebDatasetWriter / HDF5Writer)
     # ------------------------------------------------------------------
 
     def add_image(self, **kwargs: Any) -> str:
-        """
-        Enqueue a single data entry for writing. Returns immediately.
-
-        Accepts the same keyword arguments as ``HDF5Writer.add_image``:
-        ``image``, ``asset_id``, ``render_params``, ``class_name``, and any
-        DATA_SPEC keys (``semantic``, ``depth``, etc.).
-        """
         image_idx = self.images_written
         self.images_written += 1
         self._write_queue.put((image_idx, kwargs))
         return f"image_{image_idx:06d}"
 
     def finalize(self):
-        """Flush remaining data and write dataset metadata."""
-        # Drain the write queue.
         self._write_queue.put(None)
         self._write_thread.join()
 
@@ -304,15 +339,21 @@ class ParquetWriter:
             print("Warning: No images were written.")
             return
 
-        # Close any open shards (flushes remaining buffered rows).
         for split in ("train", "test"):
-            self._close_shard(split)
+            self._flush_shard(split)
 
-        # Write dataset metadata.
         info: dict[str, Any] = {
             "total_images": self.images_written,
             "creation_date": datetime.datetime.now().isoformat(),
-            "version": "2.0",
+            "version": "3.0",
+            "format": "parquet",
+            "compression": self.compression,
+            "encodings": {
+                "image": "PNG bytes (RGB uint8)",
+                "semantic|instance|part|is_partnet": "PNG bytes (grayscale uint8/uint16)",
+                "affordance": "list of COCO RLE dicts (one per channel)",
+                "depth|normal": "raw float32 bytes + shape + dtype struct",
+            },
             "splits": {
                 split: {
                     "num_images": self._split_totals[split],
@@ -335,8 +376,8 @@ class ParquetWriter:
                 print(f"  {split}: {n} images ({self._shard_counts[split]} shard(s))")
 
     def close(self):
-        """No-op (shard files are closed after each write)."""
-        pass
+        for split in ("train", "test"):
+            self._buffers[split] = []
 
     def __enter__(self):
         return self

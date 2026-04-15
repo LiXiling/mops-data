@@ -16,6 +16,7 @@ dependencies = [
     "datasets>=4.8.4",
     "mani-skill>=3.0.0b22",
     "pandas",
+    "pycocotools>=2.0.11",
     "scikit-learn>=1.7.2",
     "torch>=2.9.1",
     "torchaudio>=2.9.1",

@@ -84,6 +84,16 @@ class BaseDatasetPipeline(abc.ABC):
             ) as writer:
                 yield writer
 
+        elif fmt == OutputFormat.PARQUET:
+            from mops_data.generation.parquet_writer import ParquetWriter
+
+            with ParquetWriter(
+                self.config.output_path,
+                max_images_estimate=max_images_estimate,
+                class_names=class_names,
+            ) as writer:
+                yield writer
+
         else:
             raise ValueError(f"Unsupported output format: {fmt}")
 
