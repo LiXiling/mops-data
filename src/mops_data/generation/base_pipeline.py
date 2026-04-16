@@ -94,6 +94,16 @@ class BaseDatasetPipeline(abc.ABC):
             ) as writer:
                 yield writer
 
+        elif fmt == OutputFormat.DATASETS:
+            from mops_data.generation.datasets_writer import DatasetsWriter
+
+            with DatasetsWriter(
+                self.config.output_path,
+                max_images_estimate=max_images_estimate,
+                class_names=class_names,
+            ) as writer:
+                yield writer
+
         else:
             raise ValueError(f"Unsupported output format: {fmt}")
 
